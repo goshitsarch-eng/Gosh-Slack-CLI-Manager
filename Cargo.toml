@@ -1,0 +1,33 @@
+[package]
+name = "slackware-cli-manager"
+version = "0.1.0"
+edition = "2021"
+authors = ["goshitsarch-eng <goshitsarch@gmail.com>"]
+description = "A TUI application for managing Slackware Linux - system updates, sbotools, user management, and more"
+license = "MIT"
+repository = "https://github.com/goshitsarch-eng/Gosh-Slack-CLI-Manager"
+homepage = "https://github.com/goshitsarch-eng/Gosh-Slack-CLI-Manager"
+keywords = ["slackware", "tui", "linux", "package-manager", "cli"]
+categories = ["command-line-utilities"]
+readme = "README.md"
+rust-version = "1.70"
+
+[dependencies]
+ratatui = "0.29"
+crossterm = "0.28"
+tokio = { version = "1", features = ["full", "process", "sync"] }
+tui-textarea = "0.7"
+anyhow = "1.0"
+thiserror = "2.0"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+regex = "1"
+nix = { version = "0.29", features = ["user"] }
+sysinfo = "0.32"
+chrono = "0.4"
+toml = "0.8"
+
+[profile.release]
+lto = true
+strip = true
+codegen-units = 1
