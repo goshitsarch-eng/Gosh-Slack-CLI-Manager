@@ -3,7 +3,7 @@ use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::Modifier,
     text::{Line, Span},
-    widgets::{Block, Borders, List, ListItem, ListState, Paragraph},
+    widgets::{List, ListItem, ListState, Paragraph},
     Frame,
 };
 
@@ -111,59 +111,128 @@ impl Component for MirrorComponent {
         let chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Length(3), // Title
-                Constraint::Length(3), // Version info
+                Constraint::Length(4), // Header
                 Constraint::Min(10),   // Mirror list
                 Constraint::Length(3), // Status
             ])
             .split(area);
 
-        // Title
-        let title = Paragraph::new(Line::from(vec![Span::styled(
-            "Mirror Configuration",
-            Theme::title(),
-        )]))
-        .block(Block::default().borders(Borders::BOTTOM));
-        frame.render_widget(title, chunks[0]);
+        let header = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([Constraint::Percentage(58), Constraint::Percentage(42)])
+            .split(chunks[0]);
 
-        // Version info
-        let version_info = Paragraph::new(Line::from(vec![
-            Span::styled("Detected version: ", Theme::muted()),
-            Span::styled(self.version.display_name(), Theme::default()),
-        ]))
-        .block(Block::default().borders(Borders::NONE));
-        frame.render_widget(version_info, chunks[1]);
+        let title = Paragraph::new(vec![
+            Line::from(Span::styled("Mirror Configuration", Theme::title())),
+            Line::from(Span::styled(
+                "Choose the active Slackware mirror for your detected release track.",
+                Theme::subtitle(),
+            )),
+        ])
+        .block(Theme::panel(Theme::panel_title("Mirrors")));
+        frame.render_widget(title, header[0]);
 
-        // Mirror list
+        let active_count = self.mirrors.iter().filter(|m| m.is_active).count();
+        let version_info = Paragraph::new(vec![
+            Line::from(vec![
+                Span::styled("Track ", Theme::label()),
+                Span::styled(self.version.display_name(), Theme::badge_neutral()),
+            ]),
+            Line::from(vec![
+                Span::styled("Active mirrors ", Theme::label()),
+                Span::styled(active_count.to_string(), Theme::badge_success()),
+                Span::raw(" "),
+                Span::styled("Candidates ", Theme::label()),
+                Span::styled(self.mirrors.len().to_string(), Theme::badge_neutral()),
+            ]),
+        ])
+        .block(Theme::panel_alt(Theme::panel_title("Release track")));
+        frame.render_widget(version_info, header[1]);
+
+        let content = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([Constraint::Percentage(64), Constraint::Percentage(36)])
+            .split(chunks[1]);
+
         let items: Vec<ListItem> = self
             .mirrors
             .iter()
             .map(|m| {
-                let status = if m.is_active { "●" } else { "○" };
-                let style = if m.is_active {
-                    Theme::success()
-                } else {
-                    Theme::default()
-                };
-
-                ListItem::new(Line::from(vec![
-                    Span::styled(format!("{} ", status), style),
-                    Span::styled(&m.url, style),
-                    Span::styled(format!(" ({})", m.region), Theme::muted()),
-                ]))
+                ListItem::new(vec![
+                    Line::from(vec![
+                        if m.is_active {
+                            Span::styled(" ACTIVE ", Theme::badge_success())
+                        } else {
+                            Span::styled(" STANDBY ", Theme::badge_neutral())
+                        },
+                        Span::raw(" "),
+                        Span::styled(
+                            &m.url,
+                            if m.is_active {
+                                Theme::success()
+                            } else {
+                                Theme::value()
+                            },
+                        ),
+                    ]),
+                    Line::from(vec![
+                        Span::styled("  Region ", Theme::muted()),
+                        Span::raw(&m.region),
+                    ]),
+                ])
             })
             .collect();
 
         let list = List::new(items)
-            .block(
-                Block::default()
-                    .borders(Borders::ALL)
-                    .title(format!("Mirrors ({})", self.mirrors.len())),
-            )
+            .block(Theme::panel(Theme::panel_title(format!(
+                "Mirrors ({})",
+                self.mirrors.len()
+            ))))
             .highlight_style(Theme::highlight().add_modifier(Modifier::BOLD))
-            .highlight_symbol("→ ");
+            .highlight_symbol("▸ ");
 
-        frame.render_stateful_widget(list, chunks[2], &mut self.list_state.clone());
+        frame.render_stateful_widget(list, content[0], &mut self.list_state.clone());
+
+        let inspector_lines = if let Some(mirror) = self.get_selected_mirror() {
+            vec![
+                Line::from(vec![
+                    Span::styled("SELECTION", Theme::badge_info()),
+                    Span::raw(" "),
+                    Span::styled(&mirror.region, Theme::title()),
+                ]),
+                Line::from(""),
+                Line::from(vec![
+                    Span::styled("State ", Theme::label()),
+                    if mirror.is_active {
+                        Span::styled(" ACTIVE ", Theme::badge_success())
+                    } else {
+                        Span::styled(" STANDBY ", Theme::badge_neutral())
+                    },
+                ]),
+                Line::from(vec![
+                    Span::styled("Track ", Theme::label()),
+                    Span::raw(self.version.display_name()),
+                ]),
+                Line::from(Span::styled("URL", Theme::eyebrow())),
+                Line::from(mirror.url.clone()),
+                Line::from(""),
+                Line::from(Span::styled(
+                    "Selecting a mirror validates the exact target and then refreshes slackpkg metadata.",
+                    Theme::subtitle(),
+                )),
+            ]
+        } else {
+            vec![
+                Line::from(Span::styled("No mirror selected", Theme::muted())),
+                Line::from(""),
+                Line::from("Choose a mirror to inspect its region and activation state."),
+            ]
+        };
+        frame.render_widget(
+            Paragraph::new(inspector_lines)
+                .block(Theme::panel_alt(Theme::panel_title("Inspector"))),
+            content[1],
+        );
 
         // Status
         let status = if let Some((ref msg, is_error)) = self.status_message {
@@ -178,8 +247,8 @@ impl Component for MirrorComponent {
             Paragraph::new("Press Enter to select mirror, R to refresh list").style(Theme::muted())
         };
         frame.render_widget(
-            status.block(Block::default().borders(Borders::TOP)),
-            chunks[3],
+            status.block(Theme::panel_alt(Theme::panel_title("Status"))),
+            chunks[2],
         );
     }
 

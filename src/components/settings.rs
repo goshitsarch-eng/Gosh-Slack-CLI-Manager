@@ -3,7 +3,7 @@ use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, List, ListItem, ListState, Paragraph},
+    widgets::{List, ListItem, ListState, Paragraph},
     Frame,
 };
 use serde::{Deserialize, Serialize};
@@ -369,6 +369,85 @@ impl SettingsComponent {
             self.unsaved_changes = false;
         }
     }
+
+    fn render_section_summary(&self, frame: &mut Frame, area: Rect) {
+        let lines = match self.section {
+            SettingsSection::Theme => vec![
+                Line::from(vec![
+                    Span::styled("THEME", Theme::badge_info()),
+                    Span::raw(" "),
+                    Span::styled("Visual profile", Theme::title()),
+                ]),
+                Line::from("Choose the palette and contrast profile for the console."),
+                Line::from(""),
+                Line::from(vec![
+                    Span::styled("Current ", Theme::label()),
+                    Span::styled(self.settings.theme.name(), Theme::badge_neutral()),
+                ]),
+            ],
+            SettingsSection::Behavior => vec![
+                Line::from(vec![
+                    Span::styled("BEHAVIOR", Theme::badge_info()),
+                    Span::raw(" "),
+                    Span::styled("Operator flow", Theme::title()),
+                ]),
+                Line::from("Control confirmations and refresh cadence."),
+                Line::from(""),
+                Line::from(vec![
+                    Span::styled("Confirm actions ", Theme::label()),
+                    Span::styled(
+                        if self.settings.confirm_actions {
+                            " enabled "
+                        } else {
+                            " disabled "
+                        },
+                        if self.settings.confirm_actions {
+                            Theme::badge_success()
+                        } else {
+                            Theme::badge_warning()
+                        },
+                    ),
+                ]),
+                Line::from(vec![
+                    Span::styled("Auto refresh ", Theme::label()),
+                    Span::styled(
+                        if self.settings.auto_refresh {
+                            " enabled "
+                        } else {
+                            " disabled "
+                        },
+                        if self.settings.auto_refresh {
+                            Theme::badge_success()
+                        } else {
+                            Theme::badge_warning()
+                        },
+                    ),
+                ]),
+            ],
+            SettingsSection::Display => vec![
+                Line::from(vec![
+                    Span::styled("DISPLAY", Theme::badge_info()),
+                    Span::raw(" "),
+                    Span::styled("Density defaults", Theme::title()),
+                ]),
+                Line::from("Tune the visible defaults for file and log-heavy workflows."),
+                Line::from(""),
+                Line::from(vec![
+                    Span::styled("Default tab ", Theme::label()),
+                    Span::styled(&self.settings.default_tab, Theme::badge_neutral()),
+                ]),
+                Line::from(vec![
+                    Span::styled("Log buffer ", Theme::label()),
+                    Span::raw(format!("{} lines", self.settings.log_lines)),
+                ]),
+            ],
+        };
+
+        frame.render_widget(
+            Paragraph::new(lines).block(Theme::panel_alt(Theme::panel_title("Section summary"))),
+            area,
+        );
+    }
 }
 
 impl Component for SettingsComponent {
@@ -421,33 +500,61 @@ impl Component for SettingsComponent {
         let chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Length(3),
+                Constraint::Length(4),
                 Constraint::Min(10),
-                Constraint::Length(8),
                 Constraint::Length(3),
             ])
             .split(area);
 
         // Section tabs
-        let section_text = match self.section {
-            SettingsSection::Theme => "[Theme]  Behavior  Display",
-            SettingsSection::Behavior => " Theme  [Behavior]  Display",
-            SettingsSection::Display => " Theme   Behavior  [Display]",
-        };
+        let header = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([Constraint::Percentage(58), Constraint::Percentage(42)])
+            .split(chunks[0]);
 
         let section_bar = Paragraph::new(Line::from(vec![
-            Span::styled("Section: ", Style::default().fg(Color::Cyan)),
-            Span::raw(section_text),
+            Span::styled(
+                " THEME ",
+                if self.section == SettingsSection::Theme {
+                    Theme::tab_active()
+                } else {
+                    Theme::tab_inactive()
+                },
+            ),
+            Span::raw(" "),
+            Span::styled(
+                " BEHAVIOR ",
+                if self.section == SettingsSection::Behavior {
+                    Theme::tab_active()
+                } else {
+                    Theme::tab_inactive()
+                },
+            ),
+            Span::raw(" "),
+            Span::styled(
+                " DISPLAY ",
+                if self.section == SettingsSection::Display {
+                    Theme::tab_active()
+                } else {
+                    Theme::tab_inactive()
+                },
+            ),
+            Span::styled("  //  Tab cycles sections", Theme::muted()),
             if self.unsaved_changes {
-                Span::styled(" (unsaved)", Style::default().fg(Color::Yellow))
+                Span::styled("  UNSAVED  ", Theme::badge_warning())
             } else {
-                Span::raw("")
+                Span::styled("  SYNCED  ", Theme::badge_success())
             },
         ]))
-        .block(Block::default().borders(Borders::ALL).title(" Settings "));
-        frame.render_widget(section_bar, chunks[0]);
+        .block(Theme::panel(Theme::panel_title("Settings")));
+        frame.render_widget(section_bar, header[0]);
+        self.render_section_summary(frame, header[1]);
 
-        // Settings list
+        let content = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([Constraint::Percentage(54), Constraint::Percentage(46)])
+            .split(chunks[1]);
+
         let items: Vec<ListItem> = self
             .get_section_items()
             .iter()
@@ -459,45 +566,46 @@ impl Component for SettingsComponent {
                 };
 
                 ListItem::new(Line::from(vec![
-                    Span::styled(format!("{:<20}", name), style),
+                    Span::styled(format!("{:<18}", name), style),
+                    Span::styled("  ", Theme::surface_alt()),
                     Span::styled(
-                        format!("< {} >", value),
-                        if *enabled {
-                            Style::default().fg(Color::Cyan)
-                        } else {
-                            style
-                        },
+                        format!(" {} ", value),
+                        if *enabled { Theme::badge_info() } else { style },
                     ),
                 ]))
             })
             .collect();
 
         let list = List::new(items)
-            .block(Block::default().borders(Borders::ALL))
+            .block(Theme::panel_alt(Theme::panel_title("Controls")))
             .highlight_style(Theme::list_selected())
             .highlight_symbol("▶ ");
 
         let mut state = self.list_state.clone();
-        frame.render_stateful_widget(list, chunks[1], &mut state);
+        frame.render_stateful_widget(list, content[0], &mut state);
 
-        // Theme preview
-        self.render_theme_preview(frame, chunks[2]);
+        self.render_theme_preview(frame, content[1]);
 
         // Status bar
         let status_content = if let Some((msg, is_error)) = &self.status_message {
             Line::from(Span::styled(
                 msg.clone(),
-                Style::default().fg(if *is_error { Color::Red } else { Color::Green }),
+                if *is_error {
+                    Theme::error()
+                } else {
+                    Theme::success()
+                },
             ))
         } else {
             Line::from(Span::styled(
                 "Use ←/→ to change values, 's' to save, 'r' to reset",
-                Style::default().fg(Color::DarkGray),
+                Theme::muted(),
             ))
         };
 
-        let status = Paragraph::new(status_content).block(Block::default().borders(Borders::ALL));
-        frame.render_widget(status, chunks[3]);
+        let status =
+            Paragraph::new(status_content).block(Theme::panel_alt(Theme::panel_title("Status")));
+        frame.render_widget(status, chunks[2]);
     }
 
     fn help_text(&self) -> Vec<(&'static str, &'static str)> {
@@ -514,27 +622,41 @@ impl SettingsComponent {
     fn render_theme_preview(&self, frame: &mut Frame, area: Rect) {
         let colors = self.settings.theme.colors();
 
-        let block = Block::default()
-            .borders(Borders::ALL)
-            .title(format!(" {} Theme Preview ", self.settings.theme.name()))
-            .border_style(Style::default().fg(colors.primary));
+        let block = Theme::panel(Theme::panel_title(format!(
+            "{} theme preview",
+            self.settings.theme.name()
+        )))
+        .border_style(Style::default().fg(colors.primary));
 
         let inner = block.inner(area);
         frame.render_widget(block, area);
 
         let preview = vec![
             Line::from(vec![
-                Span::styled("Primary ", Style::default().fg(colors.primary)),
-                Span::styled("Secondary ", Style::default().fg(colors.secondary)),
-                Span::styled("Success ", Style::default().fg(colors.success)),
-                Span::styled("Error ", Style::default().fg(colors.error)),
+                Span::styled(
+                    " PRIMARY ",
+                    Style::default().fg(colors.background).bg(colors.primary),
+                ),
+                Span::raw(" "),
+                Span::styled(
+                    " SECONDARY ",
+                    Style::default().fg(colors.background).bg(colors.secondary),
+                ),
             ]),
             Line::from(vec![
-                Span::styled("Warning ", Style::default().fg(colors.warning)),
-                Span::styled("Muted ", Style::default().fg(colors.muted)),
                 Span::styled(
-                    "Selected ",
-                    Style::default().fg(colors.foreground).bg(colors.primary),
+                    " SUCCESS ",
+                    Style::default().fg(colors.background).bg(colors.success),
+                ),
+                Span::raw(" "),
+                Span::styled(
+                    " WARNING ",
+                    Style::default().fg(colors.background).bg(colors.warning),
+                ),
+                Span::raw(" "),
+                Span::styled(
+                    " ERROR ",
+                    Style::default().fg(colors.foreground).bg(colors.error),
                 ),
             ]),
             Line::from(Span::styled(
@@ -545,6 +667,14 @@ impl SettingsComponent {
                 " Background sample ",
                 Style::default().fg(colors.foreground).bg(colors.background),
             )),
+            Line::from(""),
+            Line::from(vec![
+                Span::styled("Muted text ", Style::default().fg(colors.muted)),
+                Span::styled(
+                    "Selected chip",
+                    Style::default().fg(colors.foreground).bg(colors.primary),
+                ),
+            ]),
         ];
 
         let paragraph = Paragraph::new(preview);

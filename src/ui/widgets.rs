@@ -1,6 +1,5 @@
 use ratatui::{
     layout::Rect,
-    style::Modifier,
     text::{Line, Span},
     widgets::{Block, Widget},
 };
@@ -58,21 +57,30 @@ impl Widget for ProgressList<'_> {
             area
         };
 
+        for y in inner_area.top()..inner_area.bottom() {
+            for x in inner_area.left()..inner_area.right() {
+                buf[(x, y)].set_style(Theme::surface());
+            }
+        }
+
         for (i, step) in self.steps.iter().enumerate() {
             if i as u16 >= inner_area.height {
                 break;
             }
 
-            let (icon, style) = match &step.status {
-                StepStatus::Pending => ("○", Theme::progress_pending()),
-                StepStatus::Running => ("◐", Theme::progress_running()),
-                StepStatus::Complete => ("●", Theme::progress_complete()),
-                StepStatus::Failed(_) => ("✗", Theme::error()),
+            let (icon, style, detail) = match &step.status {
+                StepStatus::Pending => ("·", Theme::progress_pending(), "Queued"),
+                StepStatus::Running => ("◆", Theme::progress_running(), "Running"),
+                StepStatus::Complete => ("■", Theme::progress_complete(), "Done"),
+                StepStatus::Failed(_) => ("×", Theme::error(), "Failed"),
             };
 
             let line = Line::from(vec![
+                Span::styled(" ", Theme::surface()),
                 Span::styled(format!(" {} ", icon), style),
                 Span::styled(&step.name, style),
+                Span::styled("  ", Theme::surface()),
+                Span::styled(detail, Theme::muted()),
             ]);
 
             let y = inner_area.y + i as u16;
@@ -103,27 +111,34 @@ impl<'a> StatusBar<'a> {
 
 impl Widget for StatusBar<'_> {
     fn render(self, area: Rect, buf: &mut ratatui::buffer::Buffer) {
-        // Fill background
-        for x in area.x..area.x + area.width {
-            buf[(x, area.y)].set_style(Theme::status_bar());
+        for y in area.top()..area.bottom() {
+            for x in area.left()..area.right() {
+                buf[(x, y)].set_style(Theme::status_bar());
+            }
         }
 
-        // Build key hints
         let mut spans = Vec::new();
-        for (key, desc) in &self.keys {
-            spans.push(Span::styled(
-                format!(" {} ", key),
-                Theme::key_hint().add_modifier(Modifier::REVERSED),
-            ));
-            spans.push(Span::styled(format!("{} ", desc), Theme::status_bar()));
+        if !self.keys.is_empty() {
+            spans.push(Span::styled(" CONTROLS ", Theme::badge_info()));
+            spans.push(Span::styled("  ", Theme::status_bar()));
         }
 
-        // Add message at the end
+        for (key, desc) in &self.keys {
+            spans.push(Span::styled(format!(" {} ", key), Theme::key_hint()));
+            spans.push(Span::styled(" ", Theme::status_bar()));
+            spans.push(Span::styled(desc.to_string(), Theme::status_bar()));
+            spans.push(Span::styled("  •  ", Theme::muted()));
+        }
+
+        if !self.keys.is_empty() {
+            spans.pop();
+        }
+
         if !self.message.is_empty() {
-            spans.push(Span::styled(
-                format!(" {} ", self.message),
-                Theme::status_bar(),
-            ));
+            if !spans.is_empty() {
+                spans.push(Span::styled("  //  ", Theme::muted()));
+            }
+            spans.push(Span::styled(self.message, Theme::status_bar()));
         }
 
         let line = Line::from(spans);

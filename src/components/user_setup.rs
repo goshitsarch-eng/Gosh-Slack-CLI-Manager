@@ -218,25 +218,56 @@ impl Component for UserSetupComponent {
         let chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Length(3), // Title
+                Constraint::Length(4), // Title
                 Constraint::Min(10),   // Form
                 Constraint::Length(3), // Status/Error
             ])
             .split(area);
 
-        // Title
-        let title = Paragraph::new(Line::from(vec![Span::styled("User Setup", Theme::title())]))
-            .block(Block::default().borders(Borders::BOTTOM));
-        frame.render_widget(title, chunks[0]);
+        let header = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([Constraint::Percentage(58), Constraint::Percentage(42)])
+            .split(chunks[0]);
 
-        // Form
+        let title = Paragraph::new(vec![
+            Line::from(Span::styled("User Setup", Theme::title())),
+            Line::from(Span::styled(
+                "Create accounts, assign groups, and optionally move to graphical login.",
+                Theme::subtitle(),
+            )),
+        ])
+        .block(Theme::panel(Theme::panel_title("Identity")));
+        frame.render_widget(title, header[0]);
+
+        let selected_groups = self.groups.iter().filter(|(_, selected)| *selected).count();
+        let runtime = Paragraph::new(vec![
+            Line::from(vec![
+                Span::styled("Selected groups ", Theme::label()),
+                Span::styled(selected_groups.to_string(), Theme::badge_neutral()),
+            ]),
+            Line::from(vec![
+                Span::styled("Runlevel ", Theme::label()),
+                if self.change_runlevel {
+                    Span::styled(" GUI LOGIN ", Theme::badge_success())
+                } else {
+                    Span::styled(" TEXT LOGIN ", Theme::badge_neutral())
+                },
+            ]),
+        ])
+        .block(Theme::panel_alt(Theme::panel_title("Runtime")));
+        frame.render_widget(runtime, header[1]);
+
         let form_chunks = Layout::default()
             .direction(Direction::Horizontal)
-            .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
+            .constraints([
+                Constraint::Percentage(38),
+                Constraint::Percentage(36),
+                Constraint::Percentage(26),
+            ])
             .split(chunks[1]);
 
         // Left side - text inputs
-        let input_block = Block::default().borders(Borders::ALL).title("User Info");
+        let input_block = Theme::panel(Theme::panel_title("User info"));
         let input_inner = input_block.inner(form_chunks[0]);
         frame.render_widget(input_block, form_chunks[0]);
 
@@ -308,8 +339,8 @@ impl Component for UserSetupComponent {
             .block(confirm_block);
         frame.render_widget(confirm, input_chunks[2]);
 
-        // Right side - groups checkboxes
-        let groups_block = Block::default().borders(Borders::ALL).title("Groups");
+        // Middle - groups checkboxes
+        let groups_block = Theme::panel(Theme::panel_title("Groups"));
         let groups_inner = groups_block.inner(form_chunks[1]);
         frame.render_widget(groups_block, form_chunks[1]);
 
@@ -355,23 +386,104 @@ impl Component for UserSetupComponent {
         let groups_para = Paragraph::new(lines);
         frame.render_widget(groups_para, groups_inner);
 
+        let current_group = if self.current_field >= 3 && self.current_field < 3 + self.groups.len()
+        {
+            self.groups
+                .get(self.current_field - 3)
+                .map(|(name, selected)| (name.as_str(), *selected))
+        } else {
+            None
+        };
+        let inspector_lines = vec![
+            Line::from(vec![
+                Span::styled("PROFILE", Theme::badge_info()),
+                Span::raw(" "),
+                Span::styled(
+                    if self.username.is_empty() {
+                        "<new user>"
+                    } else {
+                        &self.username
+                    },
+                    Theme::title(),
+                ),
+            ]),
+            Line::from(""),
+            Line::from(vec![
+                Span::styled("Password ", Theme::label()),
+                Span::styled(
+                    if self.password.is_empty() {
+                        " EMPTY "
+                    } else if self.password == self.confirm_password {
+                        " MATCH "
+                    } else {
+                        " MISMATCH "
+                    },
+                    if self.password.is_empty() {
+                        Theme::badge_warning()
+                    } else if self.password == self.confirm_password {
+                        Theme::badge_success()
+                    } else {
+                        Theme::badge_warning()
+                    },
+                ),
+            ]),
+            Line::from(vec![
+                Span::styled("Current field ", Theme::label()),
+                Span::raw(match self.current_field {
+                    0 => "username",
+                    1 => "password",
+                    2 => "confirm password",
+                    idx if idx == 3 + self.groups.len() => "runlevel",
+                    _ => "group selection",
+                }),
+            ]),
+            Line::from(""),
+            Line::from(Span::styled("Focus", Theme::eyebrow())),
+            if let Some((name, selected)) = current_group {
+                Line::from(vec![
+                    Span::styled(name, Theme::title()),
+                    Span::raw(" "),
+                    if selected {
+                        Span::styled(" INCLUDED ", Theme::badge_success())
+                    } else {
+                        Span::styled(" EXCLUDED ", Theme::badge_neutral())
+                    },
+                ])
+            } else {
+                Line::from(Span::styled(
+                    "Move through fields and groups with Tab/Shift+Tab.",
+                    Theme::subtitle(),
+                ))
+            },
+            Line::from(""),
+            Line::from(Span::styled(
+                "Press Enter only after validation passes and the account plan looks right.",
+                Theme::subtitle(),
+            )),
+        ];
+        frame.render_widget(
+            Paragraph::new(inspector_lines)
+                .block(Theme::panel_alt(Theme::panel_title("Inspector"))),
+            form_chunks[2],
+        );
+
         // Status/Error message
         let status = if let Some(ref err) = self.error_message {
             Paragraph::new(err.as_str())
                 .style(Theme::error())
-                .block(Block::default().borders(Borders::TOP))
+                .block(Theme::panel_alt(Theme::panel_title("Status")))
         } else if let Some(ref msg) = self.success_message {
             Paragraph::new(msg.as_str())
                 .style(Theme::success())
-                .block(Block::default().borders(Borders::TOP))
+                .block(Theme::panel_alt(Theme::panel_title("Status")))
         } else if self.is_running {
             Paragraph::new("Creating user...")
                 .style(Theme::warning())
-                .block(Block::default().borders(Borders::TOP))
+                .block(Theme::panel_alt(Theme::panel_title("Status")))
         } else {
             Paragraph::new("Press Enter to create user, Ctrl+R to reset")
                 .style(Theme::muted())
-                .block(Block::default().borders(Borders::TOP))
+                .block(Theme::panel_alt(Theme::panel_title("Status")))
         };
         frame.render_widget(status, chunks[2]);
     }

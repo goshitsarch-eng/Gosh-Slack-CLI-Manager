@@ -2,9 +2,9 @@ use chrono::{DateTime, Local};
 use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
-    style::{Color, Modifier, Style},
+    style::{Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, List, ListItem, ListState, Paragraph},
+    widgets::{List, ListItem, ListState, Paragraph},
     Frame,
 };
 use std::fs;
@@ -400,14 +400,15 @@ impl Component for BackupComponent {
             BackupMode::Restore => " Create Backup  [Restore Backup]",
         };
         let mode_bar = Paragraph::new(Line::from(vec![
-            Span::styled("Mode: ", Style::default().fg(Color::Cyan)),
+            Span::styled("Mode ", Theme::label()),
             Span::raw(mode_text),
+            Span::raw(" "),
+            Span::styled(
+                format!(" {} snapshots ", self.backups.len()),
+                Theme::badge_neutral(),
+            ),
         ]))
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .title(" Backup & Restore "),
-        );
+        .block(Theme::panel(Theme::panel_title("Vault")));
         frame.render_widget(mode_bar, chunks[0]);
 
         // Content
@@ -425,13 +426,17 @@ impl Component for BackupComponent {
                 None => "Confirm action?".to_string(),
             };
             Line::from(vec![
-                Span::styled(action_desc, Style::default().fg(Color::Yellow)),
+                Span::styled(action_desc, Theme::warning()),
                 Span::raw(" [Y]es / [N]o"),
             ])
         } else if let Some((msg, is_error)) = &self.status_message {
             Line::from(Span::styled(
                 msg.clone(),
-                Style::default().fg(if *is_error { Color::Red } else { Color::Green }),
+                if *is_error {
+                    Theme::error()
+                } else {
+                    Theme::success()
+                },
             ))
         } else {
             Line::from(Span::styled(
@@ -439,11 +444,12 @@ impl Component for BackupComponent {
                     "Backup directory: {} | sensitive files are opt-in",
                     BACKUP_DIR
                 ),
-                Style::default().fg(Color::DarkGray),
+                Theme::muted(),
             ))
         };
 
-        let status = Paragraph::new(status_content).block(Block::default().borders(Borders::ALL));
+        let status =
+            Paragraph::new(status_content).block(Theme::panel_alt(Theme::panel_title("Status")));
         frame.render_widget(status, chunks[2]);
     }
 
@@ -469,77 +475,180 @@ impl Component for BackupComponent {
 }
 
 impl BackupComponent {
+    fn selected_config_file(&self) -> Option<&(String, String, bool)> {
+        (self.mode == BackupMode::Create)
+            .then(|| {
+                self.list_state
+                    .selected()
+                    .and_then(|idx| self.config_files.get(idx))
+            })
+            .flatten()
+    }
+
+    fn selected_backup(&self) -> Option<&BackupEntry> {
+        (self.mode == BackupMode::Restore)
+            .then(|| {
+                self.list_state
+                    .selected()
+                    .and_then(|idx| self.backups.get(idx))
+            })
+            .flatten()
+    }
+
     fn render_create_mode(&self, frame: &mut Frame, area: Rect) {
+        let content = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([Constraint::Percentage(62), Constraint::Percentage(38)])
+            .split(area);
+
         let items: Vec<ListItem> = self
             .config_files
             .iter()
             .map(|(path, desc, selected)| {
-                let checkbox = if *selected { "[✓]" } else { "[ ]" };
+                let checkbox = if *selected { " ✓ " } else { "   " };
                 let exists = Path::new(path).exists();
-                let status = if exists { "" } else { " (not found)" };
-                let sensitivity = if Self::is_sensitive(path) {
-                    " [sensitive]"
+                let exists_badge = if exists {
+                    Span::styled(" READY ", Theme::badge_success())
                 } else {
-                    ""
+                    Span::styled(" MISSING ", Theme::badge_warning())
+                };
+                let sensitivity_badge = if Self::is_sensitive(path) {
+                    Some(Span::styled(" SENSITIVE ", Theme::badge_warning()))
+                } else {
+                    None
                 };
 
                 ListItem::new(vec![
                     Line::from(vec![
                         Span::styled(
                             checkbox,
-                            Style::default().fg(if *selected {
-                                Color::Green
+                            if *selected {
+                                Theme::badge_success()
                             } else {
-                                Color::DarkGray
-                            }),
+                                Theme::badge_neutral()
+                            },
                         ),
                         Span::raw(" "),
                         Span::styled(
                             path.clone(),
-                            Style::default().add_modifier(if exists {
+                            Theme::value().add_modifier(if exists {
                                 Modifier::empty()
                             } else {
                                 Modifier::DIM
                             }),
                         ),
-                        Span::styled(sensitivity, Style::default().fg(Color::Yellow)),
-                        Span::styled(status, Style::default().fg(Color::Red)),
+                        Span::raw(" "),
+                        exists_badge,
+                        if sensitivity_badge.is_some() {
+                            Span::raw(" ")
+                        } else {
+                            Span::raw("")
+                        },
+                        sensitivity_badge.unwrap_or_else(|| Span::raw("")),
                     ]),
-                    Line::from(Span::styled(
-                        format!("    {}", desc),
-                        Style::default().fg(Color::DarkGray),
-                    )),
+                    Line::from(Span::styled(format!("    {}", desc), Theme::muted())),
                 ])
             })
             .collect();
 
         let list = List::new(items)
-            .block(
-                Block::default()
-                    .borders(Borders::ALL)
-                    .title(" Select files to backup "),
-            )
+            .block(Theme::panel(Theme::panel_title("Selected files")))
             .highlight_style(Theme::list_selected())
             .highlight_symbol("▶ ");
 
         let mut state = self.list_state.clone();
-        frame.render_stateful_widget(list, area, &mut state);
+        frame.render_stateful_widget(list, content[0], &mut state);
+
+        let summary = {
+            let total = self.config_files.len();
+            let selected = self
+                .config_files
+                .iter()
+                .filter(|(_, _, selected)| *selected)
+                .count();
+            let sensitive = self
+                .config_files
+                .iter()
+                .filter(|(path, _, selected)| *selected && Self::is_sensitive(path))
+                .count();
+
+            let lines = if let Some((path, desc, selected_flag)) = self.selected_config_file() {
+                vec![
+                    Line::from(vec![
+                        Span::styled("SELECTION", Theme::badge_info()),
+                        Span::raw(" "),
+                        Span::styled(path, Theme::title()),
+                    ]),
+                    Line::from(""),
+                    Line::from(vec![
+                        Span::styled("Purpose ", Theme::label()),
+                        Span::raw(desc),
+                    ]),
+                    Line::from(vec![
+                        Span::styled("Included ", Theme::label()),
+                        Span::styled(
+                            if *selected_flag { " YES " } else { " NO " },
+                            if *selected_flag {
+                                Theme::badge_success()
+                            } else {
+                                Theme::badge_warning()
+                            },
+                        ),
+                    ]),
+                    Line::from(vec![
+                        Span::styled("Sensitivity ", Theme::label()),
+                        Span::styled(
+                            if Self::is_sensitive(path) {
+                                " HIGH "
+                            } else {
+                                " NORMAL "
+                            },
+                            if Self::is_sensitive(path) {
+                                Theme::badge_warning()
+                            } else {
+                                Theme::badge_neutral()
+                            },
+                        ),
+                    ]),
+                    Line::from(""),
+                    Line::from(vec![
+                        Span::styled("Selected set ", Theme::label()),
+                        Span::styled(
+                            format!(" {} / {} ", selected, total),
+                            Theme::badge_neutral(),
+                        ),
+                    ]),
+                    Line::from(vec![
+                        Span::styled("Sensitive included ", Theme::label()),
+                        Span::styled(format!(" {} ", sensitive), Theme::badge_warning()),
+                    ]),
+                ]
+            } else {
+                vec![
+                    Line::from(Span::styled("No file selected", Theme::muted())),
+                    Line::from(""),
+                    Line::from("Move through the vault roster to inspect backup coverage."),
+                ]
+            };
+
+            Paragraph::new(lines).block(Theme::panel_alt(Theme::panel_title("Inspector")))
+        };
+        frame.render_widget(summary, content[1]);
     }
 
     fn render_restore_mode(&self, frame: &mut Frame, area: Rect) {
         if self.backups.is_empty() {
-            let empty = Paragraph::new(Line::from(Span::styled(
-                "No backups found",
-                Style::default().fg(Color::DarkGray),
-            )))
-            .block(
-                Block::default()
-                    .borders(Borders::ALL)
-                    .title(" Available Backups "),
-            );
+            let empty =
+                Paragraph::new(Line::from(Span::styled("No backups found", Theme::muted())))
+                    .block(Theme::panel(Theme::panel_title("Available backups")));
             frame.render_widget(empty, area);
             return;
         }
+
+        let content = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([Constraint::Percentage(60), Constraint::Percentage(40)])
+            .split(area);
 
         let items: Vec<ListItem> = self
             .backups
@@ -549,17 +658,15 @@ impl BackupComponent {
                     Line::from(vec![
                         Span::styled(
                             backup.timestamp.format("%Y-%m-%d %H:%M:%S").to_string(),
-                            Style::default()
-                                .fg(Color::Cyan)
-                                .add_modifier(Modifier::BOLD),
+                            Theme::accent().add_modifier(Modifier::BOLD),
                         ),
                         Span::styled("  ", Style::default()),
-                        Span::styled(&backup.name, Style::default().fg(Color::DarkGray)),
+                        Span::styled(&backup.name, Theme::muted()),
                     ]),
                     Line::from(vec![
-                        Span::styled("    Files: ", Style::default().fg(Color::DarkGray)),
+                        Span::styled("    Files ", Theme::muted()),
                         Span::raw(format!("{}", backup.file_count)),
-                        Span::styled("  Size: ", Style::default().fg(Color::DarkGray)),
+                        Span::styled("  Size ", Theme::muted()),
                         Span::raw(Self::format_size(backup.size)),
                     ]),
                 ])
@@ -567,15 +674,55 @@ impl BackupComponent {
             .collect();
 
         let list = List::new(items)
-            .block(
-                Block::default()
-                    .borders(Borders::ALL)
-                    .title(" Available Backups "),
-            )
+            .block(Theme::panel(Theme::panel_title("Available backups")))
             .highlight_style(Theme::list_selected())
             .highlight_symbol("▶ ");
 
         let mut state = self.list_state.clone();
-        frame.render_stateful_widget(list, area, &mut state);
+        frame.render_stateful_widget(list, content[0], &mut state);
+
+        let inspector_lines = if let Some(backup) = self.selected_backup() {
+            vec![
+                Line::from(vec![
+                    Span::styled("SNAPSHOT", Theme::badge_info()),
+                    Span::raw(" "),
+                    Span::styled(&backup.name, Theme::title()),
+                ]),
+                Line::from(""),
+                Line::from(vec![
+                    Span::styled("Created ", Theme::label()),
+                    Span::raw(backup.timestamp.format("%Y-%m-%d %H:%M:%S").to_string()),
+                ]),
+                Line::from(vec![
+                    Span::styled("Files ", Theme::label()),
+                    Span::styled(backup.file_count.to_string(), Theme::badge_neutral()),
+                    Span::raw(" "),
+                    Span::styled("Size ", Theme::label()),
+                    Span::styled(Self::format_size(backup.size), Theme::badge_success()),
+                ]),
+                Line::from(""),
+                Line::from(vec![
+                    Span::styled("Path ", Theme::label()),
+                    Span::raw(backup.path.display().to_string()),
+                ]),
+                Line::from(""),
+                Line::from(Span::styled(
+                    "Restore replaces known managed files; delete removes the snapshot directory.",
+                    Theme::subtitle(),
+                )),
+            ]
+        } else {
+            vec![
+                Line::from(Span::styled("No backup selected", Theme::muted())),
+                Line::from(""),
+                Line::from("Choose a snapshot to inspect restore scope."),
+            ]
+        };
+
+        frame.render_widget(
+            Paragraph::new(inspector_lines)
+                .block(Theme::panel_alt(Theme::panel_title("Inspector"))),
+            content[1],
+        );
     }
 }

@@ -1,9 +1,9 @@
 use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
-    style::{Color, Modifier, Style},
+    style::{Color, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, List, ListItem, ListState, Paragraph, Wrap},
+    widgets::{List, ListItem, ListState, Paragraph, Wrap},
     Frame,
 };
 use std::fs::{self, File};
@@ -430,66 +430,146 @@ impl LogViewerComponent {
     fn render_file_list(&self, frame: &mut Frame, area: Rect) {
         let chunks = Layout::default()
             .direction(Direction::Vertical)
-            .constraints([Constraint::Min(10), Constraint::Length(3)])
+            .constraints([
+                Constraint::Length(4),
+                Constraint::Min(10),
+                Constraint::Length(3),
+            ])
             .split(area);
+
+        let total_size: u64 = self.log_files.iter().map(|log| log.size).sum();
+        let important_count = self
+            .log_files
+            .iter()
+            .filter(|log| IMPORTANT_LOGS.iter().any(|entry| log.name.contains(entry)))
+            .count();
+
+        let header = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([Constraint::Percentage(58), Constraint::Percentage(42)])
+            .split(chunks[0]);
+
+        let title_panel = Paragraph::new(vec![
+            Line::from(vec![
+                Span::styled("LOG INDEX", Theme::badge_info()),
+                Span::raw(" "),
+                Span::styled("Filesystem log inventory", Theme::title()),
+            ]),
+            Line::from(Span::styled(
+                "Browse curated system logs before opening a file for line-by-line inspection.",
+                Theme::subtitle(),
+            )),
+        ])
+        .block(Theme::panel(Theme::panel_title("Log viewer")));
+        frame.render_widget(title_panel, header[0]);
+
+        let runtime_panel = Paragraph::new(vec![
+            Line::from(vec![
+                Span::styled("Files ", Theme::label()),
+                Span::styled(self.log_files.len().to_string(), Theme::badge_neutral()),
+                Span::raw(" "),
+                Span::styled("Important ", Theme::label()),
+                Span::styled(important_count.to_string(), Theme::badge_success()),
+            ]),
+            Line::from(vec![
+                Span::styled("Visible size ", Theme::label()),
+                Span::styled(Self::format_size(total_size), Theme::badge_neutral()),
+            ]),
+        ])
+        .block(Theme::panel_alt(Theme::panel_title("Runtime")));
+        frame.render_widget(runtime_panel, header[1]);
+
+        let content = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([Constraint::Percentage(66), Constraint::Percentage(34)])
+            .split(chunks[1]);
 
         let items: Vec<ListItem> = self
             .log_files
             .iter()
             .map(|log| {
                 ListItem::new(Line::from(vec![
-                    Span::styled(
-                        format!("{:<40}", log.name),
-                        Style::default().add_modifier(Modifier::BOLD),
-                    ),
+                    Span::styled(format!("{:<38}", log.name), Theme::title()),
                     Span::styled(
                         format!("{:>8}", Self::format_size(log.size)),
-                        Style::default().fg(Color::Cyan),
+                        Theme::accent(),
                     ),
-                    Span::styled(
-                        format!("  {}", log.modified),
-                        Style::default().fg(Color::DarkGray),
-                    ),
+                    Span::styled(format!("  {}", log.modified), Theme::muted()),
                 ]))
             })
             .collect();
 
         let list = List::new(items)
-            .block(
-                Block::default()
-                    .borders(Borders::ALL)
-                    .title(format!(" Log Files ({}) ", self.log_files.len())),
-            )
+            .block(Theme::panel(Theme::panel_title(format!(
+                "Log files ({})",
+                self.log_files.len()
+            ))))
             .highlight_style(Theme::list_selected())
             .highlight_symbol("▶ ");
 
         let mut state = self.file_list_state.clone();
-        frame.render_stateful_widget(list, chunks[0], &mut state);
+        frame.render_stateful_widget(list, content[0], &mut state);
+
+        let inspector_lines = if let Some(log) = self.selected_log() {
+            vec![
+                Line::from(Span::styled(&log.name, Theme::title())),
+                Line::from(vec![
+                    Span::styled("Size ", Theme::label()),
+                    Span::styled(Self::format_size(log.size), Theme::badge_neutral()),
+                ]),
+                Line::from(vec![
+                    Span::styled("Modified ", Theme::label()),
+                    Span::raw(&log.modified),
+                ]),
+                Line::from(""),
+                Line::from(Span::styled("Path", Theme::eyebrow())),
+                Line::from(log.path.to_string_lossy().to_string()),
+                Line::from(""),
+                Line::from(Span::styled(
+                    "Press Enter to open and inspect live content.",
+                    Theme::subtitle(),
+                )),
+            ]
+        } else {
+            vec![
+                Line::from(Span::styled("No log selected", Theme::muted())),
+                Line::from(""),
+                Line::from("Pick a log file to preview its metadata."),
+            ]
+        };
+        let inspector = Paragraph::new(inspector_lines)
+            .block(Theme::panel_alt(Theme::panel_title("Inspector")));
+        frame.render_widget(inspector, content[1]);
 
         // Status bar
         let status_content = if let Some((msg, is_error)) = &self.status_message {
             Line::from(Span::styled(
                 msg.clone(),
-                Style::default().fg(if *is_error { Color::Red } else { Color::Green }),
+                if *is_error {
+                    Theme::error()
+                } else {
+                    Theme::success()
+                },
             ))
         } else if let Some(log) = self.selected_log() {
             Line::from(vec![
-                Span::styled("Path: ", Style::default().fg(Color::Cyan)),
+                Span::styled("Path: ", Theme::muted()),
                 Span::raw(log.path.to_string_lossy().to_string()),
             ])
         } else {
-            Line::from(Span::raw("Select a log file"))
+            Line::from(Span::styled("Select a log file", Theme::muted()))
         };
 
-        let status = Paragraph::new(status_content).block(Block::default().borders(Borders::ALL));
-        frame.render_widget(status, chunks[1]);
+        let status =
+            Paragraph::new(status_content).block(Theme::panel_alt(Theme::panel_title("Status")));
+        frame.render_widget(status, chunks[2]);
     }
 
     fn render_log_view(&self, frame: &mut Frame, area: Rect) {
         let chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Length(3),
+                Constraint::Length(4),
                 Constraint::Min(10),
                 Constraint::Length(3),
             ])
@@ -518,25 +598,62 @@ impl LogViewerComponent {
             String::new()
         };
 
-        let header = Paragraph::new(Line::from(vec![
-            Span::styled(&title, Style::default().add_modifier(Modifier::BOLD)),
-            Span::raw("  "),
-            Span::styled(
-                search_display,
-                Style::default().fg(if self.is_searching {
-                    Color::Yellow
+        let header = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([Constraint::Percentage(62), Constraint::Percentage(38)])
+            .split(chunks[0]);
+
+        let title_panel = Paragraph::new(vec![
+            Line::from(vec![
+                Span::styled("LIVE FILE", Theme::badge_info()),
+                Span::raw(" "),
+                Span::styled(&title, Theme::title()),
+            ]),
+            Line::from(Span::styled(
+                "Navigate by line, search in-place, or follow the live tail.",
+                Theme::subtitle(),
+            )),
+        ])
+        .block(Theme::panel(Theme::panel_title("Log viewer")));
+        frame.render_widget(title_panel, header[0]);
+
+        let meta_panel = Paragraph::new(vec![
+            Line::from(vec![
+                Span::styled("Search ", Theme::label()),
+                Span::styled(
+                    if search_display.is_empty() {
+                        "idle"
+                    } else {
+                        search_display.as_str()
+                    },
+                    if self.is_searching {
+                        Theme::warning()
+                    } else {
+                        Theme::key_hint_secondary()
+                    },
+                ),
+            ]),
+            Line::from(vec![
+                Span::styled("Mode ", Theme::label()),
+                if self.follow_mode {
+                    Span::styled(" FOLLOW ", Theme::badge_success())
                 } else {
-                    Color::Cyan
-                }),
-            ),
-            if self.follow_mode {
-                Span::styled(" [FOLLOW]", Style::default().fg(Color::Green))
-            } else {
-                Span::raw("")
-            },
-        ]))
-        .block(Block::default().borders(Borders::ALL));
-        frame.render_widget(header, chunks[0]);
+                    Span::styled(" STATIC ", Theme::badge_neutral())
+                },
+            ]),
+            Line::from(vec![
+                Span::styled("Lines ", Theme::label()),
+                Span::styled(self.log_content.len().to_string(), Theme::badge_neutral()),
+                Span::raw(" "),
+                Span::styled("Matches ", Theme::label()),
+                Span::styled(
+                    self.search_results.len().to_string(),
+                    Theme::badge_success(),
+                ),
+            ]),
+        ])
+        .block(Theme::panel_alt(Theme::panel_title("Runtime")));
+        frame.render_widget(meta_panel, header[1]);
 
         // Log content
         let visible_height = chunks[1].height.saturating_sub(2) as usize;
@@ -557,23 +674,20 @@ impl LogViewerComponent {
                 };
 
                 Line::from(vec![
-                    Span::styled(
-                        format!("{:>6} ", line_num + 1),
-                        Style::default().fg(Color::DarkGray),
-                    ),
+                    Span::styled(format!("{:>6} ", line_num + 1), Theme::muted()),
                     Span::styled(line.clone(), style),
                 ])
             })
             .collect();
 
         let content = Paragraph::new(lines)
-            .block(Block::default().borders(Borders::ALL))
+            .block(Theme::panel_alt(Theme::panel_title("Stream")))
             .wrap(Wrap { trim: false });
         frame.render_widget(content, chunks[1]);
 
         // Status bar
         let status = Paragraph::new(Line::from(vec![
-            Span::styled("Line: ", Style::default().fg(Color::Cyan)),
+            Span::styled("Line: ", Theme::muted()),
             Span::raw(format!(
                 "{}/{}",
                 self.content_scroll + 1,
@@ -588,7 +702,7 @@ impl LogViewerComponent {
                 Span::raw("")
             },
         ]))
-        .block(Block::default().borders(Borders::ALL));
+        .block(Theme::panel_alt(Theme::panel_title("Position")));
         frame.render_widget(status, chunks[2]);
     }
 }

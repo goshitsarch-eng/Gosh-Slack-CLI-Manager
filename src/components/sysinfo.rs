@@ -3,7 +3,7 @@ use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Gauge, List, ListItem, Paragraph},
+    widgets::{Block, Gauge, List, ListItem, Paragraph},
     Frame,
 };
 use std::time::Instant;
@@ -71,25 +71,22 @@ impl SysInfoComponent {
     }
 
     fn render_system_info(&self, frame: &mut Frame, area: Rect) {
-        let block = Block::default()
-            .title(" System Information ")
-            .borders(Borders::ALL)
-            .border_style(if self.selected_section == 0 {
-                Theme::highlight()
-            } else {
-                Theme::default()
-            });
+        let block = if self.selected_section == 0 {
+            Theme::panel_focused(Theme::panel_title("System information"))
+        } else {
+            Theme::panel(Theme::panel_title("System information"))
+        };
 
         let inner = block.inner(area);
         frame.render_widget(block, area);
 
         let info_lines = vec![
             Line::from(vec![
-                Span::styled("Hostname: ", Style::default().fg(Color::Cyan)),
+                Span::styled("Hostname ", Theme::label()),
                 Span::raw(System::host_name().unwrap_or_else(|| "Unknown".to_string())),
             ]),
             Line::from(vec![
-                Span::styled("OS: ", Style::default().fg(Color::Cyan)),
+                Span::styled("OS       ", Theme::label()),
                 Span::raw(format!(
                     "{} {}",
                     System::name().unwrap_or_else(|| "Unknown".to_string()),
@@ -97,15 +94,15 @@ impl SysInfoComponent {
                 )),
             ]),
             Line::from(vec![
-                Span::styled("Kernel: ", Style::default().fg(Color::Cyan)),
+                Span::styled("Kernel   ", Theme::label()),
                 Span::raw(System::kernel_version().unwrap_or_else(|| "Unknown".to_string())),
             ]),
             Line::from(vec![
-                Span::styled("Uptime: ", Style::default().fg(Color::Cyan)),
+                Span::styled("Uptime   ", Theme::label()),
                 Span::raw(Self::format_uptime(System::uptime())),
             ]),
             Line::from(vec![
-                Span::styled("Architecture: ", Style::default().fg(Color::Cyan)),
+                Span::styled("Arch     ", Theme::label()),
                 Span::raw(System::cpu_arch().unwrap_or_else(|| "Unknown".to_string())),
             ]),
         ];
@@ -129,14 +126,11 @@ impl SysInfoComponent {
     }
 
     fn render_cpu(&self, frame: &mut Frame, area: Rect) {
-        let block = Block::default()
-            .title(" CPU ")
-            .borders(Borders::ALL)
-            .border_style(if self.selected_section == 1 {
-                Theme::highlight()
-            } else {
-                Theme::default()
-            });
+        let block = if self.selected_section == 1 {
+            Theme::panel_focused(Theme::panel_title("CPU"))
+        } else {
+            Theme::panel(Theme::panel_title("CPU"))
+        };
 
         let inner = block.inner(area);
         frame.render_widget(block, area);
@@ -173,7 +167,7 @@ impl SysInfoComponent {
                 let filled = (usage / 100.0 * bar_width as f32) as usize;
                 let bar = format!("[{}{}]", "█".repeat(filled), "░".repeat(bar_width - filled));
                 ListItem::new(Line::from(vec![
-                    Span::styled(format!("CPU{:2}: ", i), Style::default().fg(Color::Cyan)),
+                    Span::styled(format!("CPU{:2} ", i), Theme::label()),
                     Span::styled(bar, Style::default().fg(Self::usage_color(usage as u16))),
                     Span::raw(format!(" {:5.1}%", usage)),
                 ]))
@@ -194,15 +188,45 @@ impl SysInfoComponent {
         }
     }
 
+    fn render_runtime_summary(&self, frame: &mut Frame, area: Rect) {
+        let lines = vec![
+            Line::from(vec![
+                Span::styled("Uptime ", Theme::label()),
+                Span::styled(
+                    Self::format_uptime(System::uptime()),
+                    Theme::badge_neutral(),
+                ),
+                Span::raw(" "),
+                Span::styled("CPUs ", Theme::label()),
+                Span::styled(self.system.cpus().len().to_string(), Theme::badge_success()),
+            ]),
+            Line::from(vec![
+                Span::styled("Disks ", Theme::label()),
+                Span::styled(self.disks.list().len().to_string(), Theme::badge_neutral()),
+                Span::raw(" "),
+                Span::styled("NICs ", Theme::label()),
+                Span::styled(
+                    self.networks.iter().count().to_string(),
+                    Theme::badge_neutral(),
+                ),
+            ]),
+            Line::from(""),
+            Line::from(Span::styled(
+                "Cycle sections with Tab and refresh snapshots with r.",
+                Theme::subtitle(),
+            )),
+        ];
+
+        let panel = Paragraph::new(lines).block(Theme::panel_alt(Theme::panel_title("Runtime")));
+        frame.render_widget(panel, area);
+    }
+
     fn render_memory(&self, frame: &mut Frame, area: Rect) {
-        let block = Block::default()
-            .title(" Memory ")
-            .borders(Borders::ALL)
-            .border_style(if self.selected_section == 2 {
-                Theme::highlight()
-            } else {
-                Theme::default()
-            });
+        let block = if self.selected_section == 2 {
+            Theme::panel_focused(Theme::panel_title("Memory"))
+        } else {
+            Theme::panel(Theme::panel_title("Memory"))
+        };
 
         let inner = block.inner(area);
         frame.render_widget(block, area);
@@ -257,14 +281,11 @@ impl SysInfoComponent {
     }
 
     fn render_network(&self, frame: &mut Frame, area: Rect) {
-        let block = Block::default()
-            .title(" Network ")
-            .borders(Borders::ALL)
-            .border_style(if self.selected_section == 3 {
-                Theme::highlight()
-            } else {
-                Theme::default()
-            });
+        let block = if self.selected_section == 3 {
+            Theme::panel_focused(Theme::panel_title("Network"))
+        } else {
+            Theme::panel(Theme::panel_title("Network"))
+        };
 
         let inner = block.inner(area);
         frame.render_widget(block, area);
@@ -295,14 +316,11 @@ impl SysInfoComponent {
     }
 
     fn render_processes(&self, frame: &mut Frame, area: Rect) {
-        let block = Block::default()
-            .title(" Top Processes ")
-            .borders(Borders::ALL)
-            .border_style(if self.selected_section == 4 {
-                Theme::highlight()
-            } else {
-                Theme::default()
-            });
+        let block = if self.selected_section == 4 {
+            Theme::panel_focused(Theme::panel_title("Top processes"))
+        } else {
+            Theme::panel(Theme::panel_title("Top processes"))
+        };
 
         let inner = block.inner(area);
         frame.render_widget(block, area);
@@ -386,13 +404,19 @@ impl Component for SysInfoComponent {
         let chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Length(7),  // System info
-                Constraint::Min(10),    // CPU + Memory
-                Constraint::Length(10), // Network + Processes
+                Constraint::Length(7),
+                Constraint::Min(10),
+                Constraint::Length(10),
             ])
             .split(area);
 
-        self.render_system_info(frame, chunks[0]);
+        let header = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([Constraint::Percentage(58), Constraint::Percentage(42)])
+            .split(chunks[0]);
+
+        self.render_system_info(frame, header[0]);
+        self.render_runtime_summary(frame, header[1]);
 
         let middle = Layout::default()
             .direction(Direction::Horizontal)

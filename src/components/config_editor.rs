@@ -36,6 +36,12 @@ pub struct ConfigEditorComponent {
 }
 
 impl ConfigEditorComponent {
+    fn selected_file_entry(&self) -> Option<(&'static str, &'static str)> {
+        self.file_list_state
+            .selected()
+            .and_then(|i| CONFIG_FILES.get(i).copied())
+    }
+
     pub fn new() -> Self {
         let mut textarea = TextArea::default();
         textarea.set_block(
@@ -192,47 +198,154 @@ impl Component for ConfigEditorComponent {
         let chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Length(3), // Title
+                Constraint::Length(4), // Title
                 Constraint::Min(10),   // Content
                 Constraint::Length(3), // Status
             ])
             .split(area);
 
-        // Title
-        let title = Paragraph::new(Line::from(vec![Span::styled(
-            "Configuration Editor",
-            Theme::title(),
-        )]))
-        .block(Block::default().borders(Borders::BOTTOM));
-        frame.render_widget(title, chunks[0]);
+        let header = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([Constraint::Percentage(58), Constraint::Percentage(42)])
+            .split(chunks[0]);
+
+        let title = Paragraph::new(vec![
+            Line::from(Span::styled("Configuration Editor", Theme::title())),
+            Line::from(Span::styled(
+                "Edit Slackware config files inside a safer, atomic-write workflow.",
+                Theme::subtitle(),
+            )),
+        ])
+        .block(Theme::panel(Theme::panel_title("Editor")));
+        frame.render_widget(title, header[0]);
+
+        let runtime = Paragraph::new(vec![
+            Line::from(vec![
+                Span::styled("Mode ", Theme::label()),
+                Span::styled(
+                    match self.mode {
+                        EditorMode::FileSelect => " SELECT ",
+                        EditorMode::Editing => " EDIT ",
+                    },
+                    Theme::badge_neutral(),
+                ),
+            ]),
+            Line::from(vec![
+                Span::styled("Modified ", Theme::label()),
+                if self.is_modified {
+                    Span::styled(" YES ", Theme::badge_warning())
+                } else {
+                    Span::styled(" NO ", Theme::badge_success())
+                },
+            ]),
+        ])
+        .block(Theme::panel_alt(Theme::panel_title("Runtime")));
+        frame.render_widget(runtime, header[1]);
 
         match self.mode {
             EditorMode::FileSelect => {
-                // File list
+                let content = Layout::default()
+                    .direction(Direction::Horizontal)
+                    .constraints([Constraint::Percentage(58), Constraint::Percentage(42)])
+                    .split(chunks[1]);
+
                 let items: Vec<ListItem> = CONFIG_FILES
                     .iter()
                     .map(|(path, desc)| {
-                        ListItem::new(Line::from(vec![
-                            Span::styled(*path, Theme::default().add_modifier(Modifier::BOLD)),
-                            Span::styled(format!(" - {}", desc), Theme::muted()),
-                        ]))
+                        ListItem::new(vec![
+                            Line::from(Span::styled(
+                                *path,
+                                Theme::default().add_modifier(Modifier::BOLD),
+                            )),
+                            Line::from(Span::styled(format!("  {}", desc), Theme::muted())),
+                        ])
                     })
                     .collect();
 
                 let list = List::new(items)
-                    .block(
-                        Block::default()
-                            .borders(Borders::ALL)
-                            .title("Select file to edit"),
-                    )
+                    .block(Theme::panel(Theme::panel_title("Select file to edit")))
                     .highlight_style(Theme::highlight().add_modifier(Modifier::BOLD))
-                    .highlight_symbol("→ ");
+                    .highlight_symbol("▸ ");
 
-                frame.render_stateful_widget(list, chunks[1], &mut self.file_list_state.clone());
+                frame.render_stateful_widget(list, content[0], &mut self.file_list_state.clone());
+
+                let inspector_lines = if let Some((path, desc)) = self.selected_file_entry() {
+                    vec![
+                        Line::from(vec![
+                            Span::styled("TARGET", Theme::badge_info()),
+                            Span::raw(" "),
+                            Span::styled(path, Theme::title()),
+                        ]),
+                        Line::from(""),
+                        Line::from(vec![
+                            Span::styled("Purpose ", Theme::label()),
+                            Span::raw(desc),
+                        ]),
+                        Line::from(vec![
+                            Span::styled("Write path ", Theme::label()),
+                            Span::raw("atomic replace"),
+                        ]),
+                        Line::from(""),
+                        Line::from(Span::styled(
+                            "Open the file, edit in place, then save with Ctrl+S.",
+                            Theme::subtitle(),
+                        )),
+                    ]
+                } else {
+                    vec![
+                        Line::from(Span::styled("No file selected", Theme::muted())),
+                        Line::from(""),
+                        Line::from("Pick a managed config file to inspect before editing."),
+                    ]
+                };
+                frame.render_widget(
+                    Paragraph::new(inspector_lines)
+                        .block(Theme::panel_alt(Theme::panel_title("Inspector"))),
+                    content[1],
+                );
             }
             EditorMode::Editing => {
-                // Text editor
-                frame.render_widget(&self.textarea, chunks[1]);
+                let content = Layout::default()
+                    .direction(Direction::Horizontal)
+                    .constraints([Constraint::Percentage(70), Constraint::Percentage(30)])
+                    .split(chunks[1]);
+
+                frame.render_widget(&self.textarea, content[0]);
+
+                let inspector_lines = vec![
+                    Line::from(vec![
+                        Span::styled("FILE", Theme::badge_info()),
+                        Span::raw(" "),
+                        Span::styled(
+                            self.current_file.as_deref().unwrap_or("unknown"),
+                            Theme::title(),
+                        ),
+                    ]),
+                    Line::from(""),
+                    Line::from(vec![
+                        Span::styled("State ", Theme::label()),
+                        if self.is_modified {
+                            Span::styled(" MODIFIED ", Theme::badge_warning())
+                        } else {
+                            Span::styled(" CLEAN ", Theme::badge_success())
+                        },
+                    ]),
+                    Line::from(""),
+                    Line::from(Span::styled("Shortcuts", Theme::eyebrow())),
+                    Line::from("Ctrl+S  save changes"),
+                    Line::from("Ctrl+Q  close editor"),
+                    Line::from("Ctrl+X  discard session"),
+                    Line::from(""),
+                    Line::from(Span::styled(
+                        "Edits are written through the app's atomic file-write path.",
+                        Theme::subtitle(),
+                    )),
+                ];
+                frame.render_widget(
+                    Paragraph::new(inspector_lines)
+                        .block(Theme::panel_alt(Theme::panel_title("Inspector"))),
+                    content[1],
+                );
             }
         }
 
@@ -248,18 +361,19 @@ impl Component for ConfigEditorComponent {
                 EditorMode::FileSelect => {
                     Paragraph::new("Press Enter to edit file").style(Theme::muted())
                 }
-                EditorMode::Editing => {
-                    let modified = if self.is_modified { " [Modified]" } else { "" };
-                    Paragraph::new(format!(
-                        "Ctrl+S: Save  Ctrl+Q: Close  Ctrl+X: Discard{}",
-                        modified
-                    ))
-                    .style(Theme::muted())
-                }
+                EditorMode::Editing => Paragraph::new(Line::from(vec![
+                    Span::styled("Ctrl+S ", Theme::key_hint()),
+                    Span::styled("save  ", Theme::muted()),
+                    Span::styled("Ctrl+Q ", Theme::key_hint()),
+                    Span::styled("close  ", Theme::muted()),
+                    Span::styled("Ctrl+X ", Theme::key_hint()),
+                    Span::styled("discard", Theme::muted()),
+                ]))
+                .style(Theme::muted()),
             }
         };
         frame.render_widget(
-            status_text.block(Block::default().borders(Borders::TOP)),
+            status_text.block(Theme::panel_alt(Theme::panel_title("Status"))),
             chunks[2],
         );
     }

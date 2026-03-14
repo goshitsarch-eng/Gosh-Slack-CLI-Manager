@@ -3,7 +3,7 @@ use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::Modifier,
     text::{Line, Span},
-    widgets::{Block, Borders, List, ListItem, ListState, Paragraph},
+    widgets::{List, ListItem, ListState, Paragraph},
     Frame,
 };
 
@@ -62,6 +62,39 @@ impl PackageSearchComponent {
         self.status_message = Some((message, is_error));
         self.is_searching = false;
         self.is_installing = false;
+    }
+
+    fn render_selected_package(&self, frame: &mut Frame, area: Rect) {
+        let lines = if let Some(pkg) = self.get_selected_package() {
+            vec![
+                Line::from(vec![
+                    Span::styled("PACKAGE", Theme::badge_info()),
+                    Span::raw(" "),
+                    Span::styled(&pkg.name, Theme::title()),
+                ]),
+                Line::from(vec![
+                    Span::styled("Category ", Theme::label()),
+                    Span::styled(&pkg.category, Theme::badge_neutral()),
+                ]),
+                Line::from(""),
+                Line::from(Span::styled("Description", Theme::eyebrow())),
+                Line::from(pkg.description.clone()),
+                Line::from(""),
+                Line::from(Span::styled("Actions", Theme::eyebrow())),
+                Line::from("Enter   search current query"),
+                Line::from("Ctrl+I  install selected package"),
+                Line::from("Tab     move between search hits"),
+            ]
+        } else {
+            vec![
+                Line::from(Span::styled("No package selected", Theme::muted())),
+                Line::from(""),
+                Line::from("Search for a package to inspect details here."),
+            ]
+        };
+
+        let panel = Paragraph::new(lines).block(Theme::panel_alt(Theme::panel_title("Inspector")));
+        frame.render_widget(panel, area);
     }
 }
 
@@ -136,39 +169,69 @@ impl Component for PackageSearchComponent {
         let chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Length(3), // Title
-                Constraint::Length(3), // Search input
-                Constraint::Min(10),   // Results
+                Constraint::Length(5),
+                Constraint::Min(10),
                 Constraint::Length(3), // Status
             ])
             .split(area);
 
-        // Title
-        let title = Paragraph::new(Line::from(vec![Span::styled(
-            "Package Search (SlackBuilds.org)",
-            Theme::title(),
-        )]))
-        .block(Block::default().borders(Borders::BOTTOM));
-        frame.render_widget(title, chunks[0]);
+        let header = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([Constraint::Percentage(58), Constraint::Percentage(42)])
+            .split(chunks[0]);
 
-        // Search input
-        let search_block = Block::default()
-            .borders(Borders::ALL)
-            .title("Search")
-            .border_style(Theme::border_focused());
-        let search = Paragraph::new(self.search_query.as_str())
-            .style(Theme::input_active())
-            .block(search_block);
-        frame.render_widget(search, chunks[1]);
+        let title = Paragraph::new(vec![
+            Line::from(Span::styled("SlackBuilds Package Search", Theme::title())),
+            Line::from(Span::styled(
+                "Query, inspect, and install packages without leaving the terminal.",
+                Theme::subtitle(),
+            )),
+        ])
+        .block(Theme::panel(Theme::panel_title("Search deck")));
+        frame.render_widget(title, header[0]);
 
-        // Results list
+        let query_panel = Paragraph::new(vec![
+            Line::from(vec![
+                Span::styled("Query ", Theme::label()),
+                Span::styled(
+                    if self.search_query.is_empty() {
+                        "<empty>"
+                    } else {
+                        self.search_query.as_str()
+                    },
+                    Theme::input_active(),
+                ),
+            ]),
+            Line::from(vec![
+                Span::styled("Results ", Theme::label()),
+                Span::styled(self.results.len().to_string(), Theme::badge_neutral()),
+                Span::raw(" "),
+                if self.is_searching {
+                    Span::styled(" SEARCHING ", Theme::badge_warning())
+                } else if self.is_installing {
+                    Span::styled(" INSTALLING ", Theme::badge_warning())
+                } else {
+                    Span::styled(" READY ", Theme::badge_success())
+                },
+            ]),
+        ])
+        .style(Theme::input_active())
+        .block(Theme::panel_focused(Theme::panel_title("Query")));
+        frame.render_widget(query_panel, header[1]);
+
+        let content = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([Constraint::Percentage(62), Constraint::Percentage(38)])
+            .split(chunks[1]);
+
         let items: Vec<ListItem> = self
             .results
             .iter()
             .map(|pkg| {
                 ListItem::new(Line::from(vec![
-                    Span::styled(&pkg.name, Theme::default().add_modifier(Modifier::BOLD)),
-                    Span::styled(format!(" ({})", pkg.category), Theme::muted()),
+                    Span::styled(&pkg.name, Theme::title()),
+                    Span::raw(" "),
+                    Span::styled(format!(" {} ", pkg.category), Theme::badge_neutral()),
                     Span::raw(" - "),
                     Span::styled(
                         if pkg.description.len() > 50 {
@@ -189,13 +252,13 @@ impl Component for PackageSearchComponent {
         };
 
         let list = List::new(items)
-            .block(Block::default().borders(Borders::ALL).title(results_title))
+            .block(Theme::panel(Theme::panel_title(results_title)))
             .highlight_style(Theme::highlight().add_modifier(Modifier::BOLD))
-            .highlight_symbol("→ ");
+            .highlight_symbol("▸ ");
 
-        frame.render_stateful_widget(list, chunks[2], &mut self.list_state.clone());
+        frame.render_stateful_widget(list, content[0], &mut self.list_state.clone());
+        self.render_selected_package(frame, content[1]);
 
-        // Status
         let status = if let Some((ref msg, is_error)) = self.status_message {
             Paragraph::new(msg.as_str()).style(if is_error {
                 Theme::error()
@@ -211,8 +274,8 @@ impl Component for PackageSearchComponent {
                 .style(Theme::muted())
         };
         frame.render_widget(
-            status.block(Block::default().borders(Borders::TOP)),
-            chunks[3],
+            status.block(Theme::panel_alt(Theme::panel_title("Status"))),
+            chunks[2],
         );
     }
 

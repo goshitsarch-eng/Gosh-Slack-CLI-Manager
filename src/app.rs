@@ -2,7 +2,7 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     text::{Line, Span},
-    widgets::{Block, Borders},
+    widgets::{Block, Paragraph},
     Frame,
 };
 use std::fs;
@@ -1145,22 +1145,64 @@ impl App {
 
     /// Render the UI
     pub fn render(&self, frame: &mut Frame) {
+        frame.render_widget(Block::default().style(Theme::app()), frame.area());
+
         let layout = AppLayout::new(frame.area());
+        let header_chunks = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([Constraint::Min(32), Constraint::Length(36)])
+            .split(layout.header);
 
-        let mut title_spans = vec![
-            Span::styled(" Slackware CLI Manager ", Theme::title()),
-            Span::styled(
-                format!(" - {} ", self.slackware_version.display_name()),
-                Theme::muted(),
-            ),
-        ];
-        if !self.is_root {
-            title_spans.push(Span::styled(" [Read-only mode] ", Theme::warning()));
-        }
+        let header = Paragraph::new(vec![
+            Line::from(vec![
+                Span::styled("OPERATIONS CONSOLE", Theme::eyebrow()),
+                Span::styled("  //  ", Theme::divider()),
+                Span::styled("SLACKWARE", Theme::hero()),
+                Span::styled(" CLI MANAGER", Theme::title()),
+            ]),
+            Line::from(vec![
+                Span::styled("System track ", Theme::label()),
+                Span::styled(self.slackware_version.display_name(), Theme::subtitle()),
+            ]),
+            Line::from(vec![
+                Span::styled("Layout ", Theme::label()),
+                Span::styled(
+                    "dense panels, inspector rails, live state badges",
+                    Theme::accent(),
+                ),
+            ]),
+        ])
+        .block(Theme::panel(Theme::panel_title("Command Deck")));
+        frame.render_widget(header, header_chunks[0]);
 
-        let header = ratatui::widgets::Paragraph::new(Line::from(title_spans))
-            .block(Block::default().borders(Borders::BOTTOM));
-        frame.render_widget(header, layout.header);
+        let mode_badge = if self.is_root {
+            Span::styled(" ROOT ENABLED ", Theme::badge_success())
+        } else {
+            Span::styled(" READ ONLY ", Theme::badge_warning())
+        };
+        let summary = Paragraph::new(vec![
+            Line::from(vec![
+                Span::styled("Current tab ", Theme::label()),
+                Span::styled(self.current_tab.title(), Theme::title()),
+            ]),
+            Line::from(vec![
+                mode_badge,
+                Span::raw(" "),
+                Span::styled(
+                    format!("{} tabs online", Tab::all().len()),
+                    Theme::badge_neutral(),
+                ),
+            ]),
+            Line::from(vec![
+                Span::styled("Navigation ", Theme::label()),
+                Span::styled(
+                    "split into primary, secondary, and utility lanes",
+                    Theme::subtitle(),
+                ),
+            ]),
+        ])
+        .block(Theme::panel_alt(Theme::panel_title("Runtime")));
+        frame.render_widget(summary, header_chunks[1]);
 
         self.render_tabs(frame, layout.tabs);
 
@@ -1190,7 +1232,14 @@ impl App {
             keys.push(("Read-only", "Mutating actions disabled"));
         }
 
-        let status = StatusBar::new("").keys(keys);
+        let access_mode = if self.is_root { "root" } else { "read-only" };
+        let status_message = format!(
+            "{} tab active on {} track in {} mode",
+            self.current_tab.title(),
+            self.slackware_version.display_name(),
+            access_mode
+        );
+        let status = StatusBar::new(&status_message).keys(keys);
         frame.render_widget(status, layout.status_bar);
 
         if self.show_exit_warning {
@@ -1199,10 +1248,14 @@ impl App {
     }
 
     fn render_tabs(&self, frame: &mut Frame, area: Rect) {
+        let block = Theme::panel(Theme::panel_title("Navigation"));
+        let inner = block.inner(area);
+        frame.render_widget(block, area);
+
         let chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([Constraint::Length(1), Constraint::Length(1)])
-            .split(area);
+            .split(inner);
 
         let primary_tabs: Vec<Span> = Tab::primary_tabs()
             .iter()
@@ -1216,7 +1269,7 @@ impl App {
             })
             .collect();
         frame.render_widget(
-            ratatui::widgets::Paragraph::new(Line::from(primary_tabs)),
+            Paragraph::new(Line::from(primary_tabs)).style(Theme::surface()),
             chunks[0],
         );
 
@@ -1231,7 +1284,7 @@ impl App {
                 Span::styled(format!(" {} {} ", tab.shortcut(), tab.title()), style)
             })
             .collect();
-        secondary_spans.push(Span::styled(" │ ", Theme::muted()));
+        secondary_spans.push(Span::styled("  //  ", Theme::tab_separator()));
 
         for tab in Tab::additional_tabs() {
             let style = if tab == self.current_tab {
@@ -1246,7 +1299,7 @@ impl App {
         }
 
         frame.render_widget(
-            ratatui::widgets::Paragraph::new(Line::from(secondary_spans)),
+            Paragraph::new(Line::from(secondary_spans)).style(Theme::surface()),
             chunks[1],
         );
     }
@@ -1279,10 +1332,8 @@ impl App {
         let dialog_area = centered_rect(55, 45, area);
         frame.render_widget(Clear, dialog_area);
 
-        let dialog = Block::default()
-            .title(" !! BOOTLOADER NOT UPDATED !! ")
-            .borders(Borders::ALL)
-            .border_style(Theme::error());
+        let dialog =
+            Theme::panel(Theme::panel_title("Bootloader warning")).border_style(Theme::error());
         let inner = dialog.inner(dialog_area);
         frame.render_widget(dialog, dialog_area);
 

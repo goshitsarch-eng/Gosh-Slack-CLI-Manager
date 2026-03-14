@@ -1,9 +1,9 @@
 use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
-    style::{Color, Modifier, Style},
+    style::{Color, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, List, ListItem, ListState, Paragraph},
+    widgets::{List, ListItem, ListState, Paragraph},
     Frame,
 };
 use std::fs;
@@ -213,6 +213,54 @@ impl ServiceComponent {
     pub fn set_status(&mut self, message: String, is_error: bool) {
         self.status_message = Some((message, is_error));
     }
+
+    fn render_service_details(&self, frame: &mut Frame, area: Rect) {
+        let lines = if let Some(service) = self.selected_service() {
+            vec![
+                Line::from(vec![
+                    Span::styled("SERVICE", Theme::badge_info()),
+                    Span::raw(" "),
+                    Span::styled(&service.name, Theme::title()),
+                ]),
+                Line::from(vec![
+                    Span::styled("State ", Theme::label()),
+                    if service.is_running {
+                        Span::styled(" RUNNING ", Theme::badge_success())
+                    } else {
+                        Span::styled(" STOPPED ", Theme::badge_warning())
+                    },
+                ]),
+                Line::from(vec![
+                    Span::styled("Path ", Theme::label()),
+                    Span::raw(&service.path),
+                ]),
+                Line::from(vec![
+                    Span::styled("Enabled ", Theme::label()),
+                    if service.is_enabled {
+                        Span::styled(" YES ", Theme::badge_success())
+                    } else {
+                        Span::styled(" NO ", Theme::badge_neutral())
+                    },
+                ]),
+                Line::from(""),
+                Line::from(Span::styled("Description", Theme::eyebrow())),
+                Line::from(service.description.clone()),
+                Line::from(""),
+                Line::from(Span::styled("Actions", Theme::eyebrow())),
+                Line::from("s start   x stop"),
+                Line::from("r restart e toggle exec bit"),
+            ]
+        } else {
+            vec![
+                Line::from(Span::styled("No service selected", Theme::muted())),
+                Line::from(""),
+                Line::from("Pick a service to inspect its current state."),
+            ]
+        };
+
+        let panel = Paragraph::new(lines).block(Theme::panel_alt(Theme::panel_title("Inspector")));
+        frame.render_widget(panel, area);
+    }
 }
 
 impl Component for ServiceComponent {
@@ -310,31 +358,70 @@ impl Component for ServiceComponent {
         let chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Length(3),
+                Constraint::Length(4),
                 Constraint::Min(10),
                 Constraint::Length(3),
             ])
             .split(area);
 
-        // Filter bar
+        let header = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([Constraint::Percentage(64), Constraint::Percentage(36)])
+            .split(chunks[0]);
+
         let filter_text = match self.filter {
             ServiceFilter::All => "[All]  Running  Stopped  Enabled",
             ServiceFilter::Running => " All  [Running]  Stopped  Enabled",
             ServiceFilter::Stopped => " All   Running  [Stopped]  Enabled",
             ServiceFilter::Enabled => " All   Running   Stopped  [Enabled]",
         };
-        let filter_bar = Paragraph::new(Line::from(vec![
-            Span::styled("Filter: ", Style::default().fg(Color::Cyan)),
-            Span::raw(filter_text),
-            Span::styled(
-                format!("  ({} services)", self.filtered_services().len()),
-                Style::default().fg(Color::DarkGray),
-            ),
-        ]))
-        .block(Block::default().borders(Borders::ALL).title(" Services "));
-        frame.render_widget(filter_bar, chunks[0]);
+        let filter_bar = Paragraph::new(vec![
+            Line::from(vec![
+                Span::styled("Filter ", Theme::label()),
+                Span::raw(filter_text),
+            ]),
+            Line::from(Span::styled(
+                format!(
+                    "{} services visible in current filter",
+                    self.filtered_services().len()
+                ),
+                Theme::subtitle(),
+            )),
+        ])
+        .block(Theme::panel(Theme::panel_title("Services")));
+        frame.render_widget(filter_bar, header[0]);
 
-        // Service list
+        let running = self
+            .services
+            .iter()
+            .filter(|service| service.is_running)
+            .count();
+        let enabled = self
+            .services
+            .iter()
+            .filter(|service| service.is_enabled)
+            .count();
+        let summary = Paragraph::new(vec![
+            Line::from(vec![
+                Span::styled("Running ", Theme::label()),
+                Span::styled(running.to_string(), Theme::badge_success()),
+                Span::raw(" "),
+                Span::styled("Enabled ", Theme::label()),
+                Span::styled(enabled.to_string(), Theme::badge_neutral()),
+            ]),
+            Line::from(Span::styled(
+                "Use filter tabs to narrow the roster before taking action.",
+                Theme::subtitle(),
+            )),
+        ])
+        .block(Theme::panel_alt(Theme::panel_title("Runtime")));
+        frame.render_widget(summary, header[1]);
+
+        let content = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([Constraint::Percentage(64), Constraint::Percentage(36)])
+            .split(chunks[1]);
+
         let filtered = self.filtered_services();
         let items: Vec<ListItem> = filtered
             .iter()
@@ -342,29 +429,26 @@ impl Component for ServiceComponent {
                 let (status, color) = service.status_display();
                 ListItem::new(vec![
                     Line::from(vec![
-                        Span::styled(
-                            format!("{:<20}", service.name),
-                            Style::default().add_modifier(Modifier::BOLD),
-                        ),
+                        Span::styled(format!("{:<20}", service.name), Theme::title()),
                         Span::styled(format!(" {:<20}", status), Style::default().fg(color)),
                     ]),
                     Line::from(vec![Span::styled(
                         format!("  {}", service.description),
-                        Style::default().fg(Color::DarkGray),
+                        Theme::muted(),
                     )]),
                 ])
             })
             .collect();
 
         let list = List::new(items)
-            .block(Block::default().borders(Borders::ALL))
+            .block(Theme::panel_alt(Theme::panel_title("Service roster")))
             .highlight_style(Theme::list_selected())
             .highlight_symbol("▶ ");
 
         let mut state = self.list_state.clone();
-        frame.render_stateful_widget(list, chunks[1], &mut state);
+        frame.render_stateful_widget(list, content[0], &mut state);
+        self.render_service_details(frame, content[1]);
 
-        // Status bar
         let status_content = if self.show_confirm {
             let action_desc = match &self.pending_action {
                 Some(ServiceAction::Start(n)) => format!("Start {}?", n),
@@ -374,24 +458,29 @@ impl Component for ServiceComponent {
                 None => "Confirm action?".to_string(),
             };
             Line::from(vec![
-                Span::styled(action_desc, Style::default().fg(Color::Yellow)),
+                Span::styled(action_desc, Theme::warning()),
                 Span::raw(" [Y]es / [N]o"),
             ])
         } else if let Some((msg, is_error)) = &self.status_message {
             Line::from(Span::styled(
                 msg.clone(),
-                Style::default().fg(if *is_error { Color::Red } else { Color::Green }),
+                if *is_error {
+                    Theme::error()
+                } else {
+                    Theme::success()
+                },
             ))
         } else if let Some(service) = self.selected_service() {
             Line::from(vec![
-                Span::styled("Path: ", Style::default().fg(Color::Cyan)),
+                Span::styled("Path ", Theme::label()),
                 Span::raw(&service.path),
             ])
         } else {
-            Line::from(Span::raw("Select a service"))
+            Line::from(Span::styled("Select a service", Theme::muted()))
         };
 
-        let status = Paragraph::new(status_content).block(Block::default().borders(Borders::ALL));
+        let status =
+            Paragraph::new(status_content).block(Theme::panel_alt(Theme::panel_title("Status")));
         frame.render_widget(status, chunks[2]);
     }
 

@@ -65,7 +65,6 @@ pub enum Tab {
 }
 
 impl Tab {
-    #[cfg(test)]
     pub fn all() -> Vec<Tab> {
         vec![
             Tab::Updater,

@@ -1,9 +1,9 @@
 use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
-    style::{Color, Modifier, Style},
+    style::{Color, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Gauge, List, ListItem, ListState, Paragraph},
+    widgets::{Gauge, List, ListItem, ListState, Paragraph},
     Frame,
 };
 use std::fs;
@@ -233,6 +233,54 @@ impl DiskComponent {
             Color::Green
         }
     }
+
+    fn render_selected_disk(&self, frame: &mut Frame, area: Rect) {
+        let lines = if let Some(disk) = self.selected_disk() {
+            vec![
+                Line::from(Span::styled(&disk.name, Theme::title())),
+                Line::from(vec![
+                    Span::styled("State ", Theme::muted()),
+                    Span::styled(
+                        if disk.is_mounted {
+                            "mounted"
+                        } else {
+                            "unmounted"
+                        },
+                        Theme::key_hint_secondary(),
+                    ),
+                ]),
+                Line::from(vec![
+                    Span::styled("Filesystem ", Theme::muted()),
+                    Span::raw(&disk.filesystem),
+                ]),
+                Line::from(vec![
+                    Span::styled("Device ", Theme::muted()),
+                    Span::raw(&disk.device_path),
+                ]),
+                Line::from(vec![
+                    Span::styled("Mount ", Theme::muted()),
+                    Span::raw(disk.mount_point.as_deref().unwrap_or("-")),
+                ]),
+                Line::from(vec![
+                    Span::styled("Capacity ", Theme::muted()),
+                    Span::raw(Self::format_size(disk.size)),
+                ]),
+                Line::from(""),
+                Line::from("Actions: m mount, u unmount, f check fs"),
+            ]
+        } else {
+            vec![
+                Line::from(Span::styled("No disk selected", Theme::muted())),
+                Line::from(""),
+                Line::from("Pick a disk to inspect its mount and capacity data."),
+            ]
+        };
+
+        frame.render_widget(
+            Paragraph::new(lines).block(Theme::panel_alt(Theme::panel_title("Inspector"))),
+            area,
+        );
+    }
 }
 
 impl Component for DiskComponent {
@@ -319,17 +367,25 @@ impl Component for DiskComponent {
             ])
             .split(area);
 
-        // Summary
         self.render_summary(frame, chunks[0]);
 
-        // Disk list or details
+        let content = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([Constraint::Percentage(64), Constraint::Percentage(36)])
+            .split(chunks[1]);
+
         match self.mode {
-            DiskMode::Overview => self.render_list(frame, chunks[1]),
+            DiskMode::Overview => {
+                self.render_list(frame, content[0]);
+                self.render_selected_disk(frame, content[1]);
+            }
             DiskMode::Details => {
                 if let Some(disk) = self.selected_disk() {
-                    self.render_details(frame, chunks[1], disk);
+                    self.render_details(frame, content[0], disk);
+                    self.render_selected_disk(frame, content[1]);
                 } else {
-                    self.render_list(frame, chunks[1]);
+                    self.render_list(frame, content[0]);
+                    self.render_selected_disk(frame, content[1]);
                 }
             }
         }
@@ -343,24 +399,29 @@ impl Component for DiskComponent {
                 None => "Confirm action?".to_string(),
             };
             Line::from(vec![
-                Span::styled(action_desc, Style::default().fg(Color::Yellow)),
+                Span::styled(action_desc, Theme::warning()),
                 Span::raw(" [Y]es / [N]o"),
             ])
         } else if let Some((msg, is_error)) = &self.status_message {
             Line::from(Span::styled(
                 msg.clone(),
-                Style::default().fg(if *is_error { Color::Red } else { Color::Green }),
+                if *is_error {
+                    Theme::error()
+                } else {
+                    Theme::success()
+                },
             ))
         } else if let Some(disk) = self.selected_disk() {
             Line::from(vec![
-                Span::styled("Device: ", Style::default().fg(Color::Cyan)),
+                Span::styled("Device: ", Theme::muted()),
                 Span::raw(&disk.device_path),
             ])
         } else {
-            Line::from(Span::raw("Select a disk"))
+            Line::from(Span::styled("Select a disk", Theme::muted()))
         };
 
-        let status = Paragraph::new(status_content).block(Block::default().borders(Borders::ALL));
+        let status =
+            Paragraph::new(status_content).block(Theme::panel_alt(Theme::panel_title("Status")));
         frame.render_widget(status, chunks[2]);
     }
 
@@ -381,9 +442,7 @@ impl Component for DiskComponent {
 
 impl DiskComponent {
     fn render_summary(&self, frame: &mut Frame, area: Rect) {
-        let block = Block::default()
-            .borders(Borders::ALL)
-            .title(" Disk Management ");
+        let block = Theme::panel(Theme::panel_title("Disk management"));
 
         let inner = block.inner(area);
         frame.render_widget(block, area);
@@ -412,25 +471,36 @@ impl DiskComponent {
 
         let chunks = Layout::default()
             .direction(Direction::Horizontal)
-            .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
+            .constraints([Constraint::Percentage(38), Constraint::Percentage(62)])
             .split(inner);
 
-        // Stats
         let stats = Paragraph::new(vec![
             Line::from(vec![
-                Span::styled("Mounted:   ", Style::default().fg(Color::Cyan)),
-                Span::raw(format!("{} partitions", mounted_count)),
+                Span::styled("Mounted ", Theme::label()),
+                Span::styled(format!(" {} ", mounted_count), Theme::badge_success()),
+                Span::styled("  Unmounted ", Theme::label()),
+                Span::styled(format!(" {} ", unmounted_count), Theme::badge_warning()),
             ]),
             Line::from(vec![
-                Span::styled("Unmounted: ", Style::default().fg(Color::Cyan)),
-                Span::raw(format!("{} partitions", unmounted_count)),
+                Span::styled("Mode ", Theme::label()),
+                Span::styled(
+                    if self.mode == DiskMode::Overview {
+                        " OVERVIEW "
+                    } else {
+                        " DETAILS "
+                    },
+                    Theme::badge_neutral(),
+                ),
             ]),
+            Line::from(Span::styled(
+                "Inspect mount state and confirm mutating actions before execution.",
+                Theme::subtitle(),
+            )),
         ]);
         frame.render_widget(stats, chunks[0]);
 
-        // Overall usage gauge
         let gauge = Gauge::default()
-            .block(Block::default().title("Total Usage"))
+            .block(Theme::panel_alt(Theme::panel_title("Total usage")))
             .gauge_style(Style::default().fg(Self::usage_color(overall_percent as u8)))
             .percent(overall_percent)
             .label(format!(
@@ -450,26 +520,20 @@ impl DiskComponent {
                 let mount_str = disk.mount_point.as_deref().unwrap_or("-");
 
                 let status = if disk.is_mounted {
-                    Span::styled("●", Style::default().fg(Color::Green))
+                    Span::styled("●", Theme::success())
                 } else {
-                    Span::styled("○", Style::default().fg(Color::DarkGray))
+                    Span::styled("○", Theme::muted())
                 };
 
                 ListItem::new(vec![
                     Line::from(vec![
                         status,
                         Span::raw(" "),
-                        Span::styled(
-                            format!("{:<12}", disk.name),
-                            Style::default().add_modifier(Modifier::BOLD),
-                        ),
-                        Span::styled(
-                            format!("{:<10}", disk.filesystem),
-                            Style::default().fg(Color::Cyan),
-                        ),
+                        Span::styled(format!("{:<12}", disk.name), Theme::title()),
+                        Span::styled(format!("{:<10}", disk.filesystem), Theme::accent()),
                         Span::styled(
                             format!("{:>10}", Self::format_size(disk.size)),
-                            Style::default().fg(Color::Yellow),
+                            Theme::warning(),
                         ),
                         if disk.is_mounted {
                             Span::styled(
@@ -481,7 +545,7 @@ impl DiskComponent {
                         },
                     ]),
                     Line::from(vec![
-                        Span::styled("  Mount: ", Style::default().fg(Color::DarkGray)),
+                        Span::styled("  Mount ", Theme::muted()),
                         Span::raw(mount_str),
                     ]),
                 ])
@@ -489,11 +553,10 @@ impl DiskComponent {
             .collect();
 
         let list = List::new(items)
-            .block(
-                Block::default()
-                    .borders(Borders::ALL)
-                    .title(format!(" Partitions ({}) ", self.disks.len())),
-            )
+            .block(Theme::panel_alt(Theme::panel_title(format!(
+                "Partitions ({})",
+                self.disks.len()
+            ))))
             .highlight_style(Theme::list_selected())
             .highlight_symbol("▶ ");
 
@@ -502,9 +565,7 @@ impl DiskComponent {
     }
 
     fn render_details(&self, frame: &mut Frame, area: Rect, disk: &DiskInfo) {
-        let block = Block::default()
-            .borders(Borders::ALL)
-            .title(format!(" {} Details ", disk.name));
+        let block = Theme::panel(Theme::panel_title(format!("{} details", disk.name)));
 
         let inner = block.inner(area);
         frame.render_widget(block, area);
@@ -516,28 +577,31 @@ impl DiskComponent {
 
         // Info
         let info = vec![
+            Line::from(Span::styled("Inventory", Theme::eyebrow())),
             Line::from(vec![
-                Span::styled("Device:     ", Style::default().fg(Color::Cyan)),
+                Span::styled("Device     ", Theme::label()),
                 Span::raw(&disk.device_path),
             ]),
             Line::from(vec![
-                Span::styled("Filesystem: ", Style::default().fg(Color::Cyan)),
+                Span::styled("Filesystem ", Theme::label()),
                 Span::raw(&disk.filesystem),
             ]),
             Line::from(vec![
-                Span::styled("Mount:      ", Style::default().fg(Color::Cyan)),
+                Span::styled("Mount      ", Theme::label()),
                 Span::raw(disk.mount_point.as_deref().unwrap_or("Not mounted")),
             ]),
+            Line::from(""),
+            Line::from(Span::styled("Capacity", Theme::eyebrow())),
             Line::from(vec![
-                Span::styled("Size:       ", Style::default().fg(Color::Cyan)),
+                Span::styled("Size       ", Theme::label()),
                 Span::raw(Self::format_size(disk.size)),
             ]),
             Line::from(vec![
-                Span::styled("Used:       ", Style::default().fg(Color::Cyan)),
+                Span::styled("Used       ", Theme::label()),
                 Span::raw(Self::format_size(disk.used)),
             ]),
             Line::from(vec![
-                Span::styled("Available:  ", Style::default().fg(Color::Cyan)),
+                Span::styled("Available  ", Theme::label()),
                 Span::raw(Self::format_size(disk.available)),
             ]),
         ];
@@ -548,7 +612,7 @@ impl DiskComponent {
         // Usage gauge
         if disk.is_mounted {
             let gauge = Gauge::default()
-                .block(Block::default().title("Usage"))
+                .block(Theme::panel_alt(Theme::panel_title("Usage")))
                 .gauge_style(Style::default().fg(Self::usage_color(disk.use_percent)))
                 .percent(disk.use_percent as u16)
                 .label(format!("{}%", disk.use_percent));

@@ -3,7 +3,7 @@ use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, List, ListItem, ListState, Paragraph},
+    widgets::{List, ListItem, ListState, Paragraph},
     Frame,
 };
 use std::fs;
@@ -427,7 +427,7 @@ impl Component for CronComponent {
         let chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Length(3),
+                Constraint::Length(4),
                 Constraint::Min(10),
                 Constraint::Length(3),
             ])
@@ -445,22 +445,55 @@ impl Component for CronComponent {
         };
 
         let filtered_jobs = self.filtered_jobs();
-        let filter_bar = Paragraph::new(Line::from(vec![
-            Span::styled("Filter: ", Style::default().fg(Color::Cyan)),
-            Span::raw(filter_text),
-            Span::styled(
-                format!("  ({} jobs)", filtered_jobs.len()),
-                Style::default().fg(Color::DarkGray),
-            ),
-        ]))
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .title(" Cron Job Manager "),
-        );
-        frame.render_widget(filter_bar, chunks[0]);
+        let header = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([Constraint::Percentage(60), Constraint::Percentage(40)])
+            .split(chunks[0]);
 
-        // Job list
+        let filter_bar = Paragraph::new(vec![
+            Line::from(vec![
+                Span::styled("Filter ", Theme::label()),
+                Span::raw(filter_text),
+            ]),
+            Line::from(Span::styled(
+                "Rotate filters with Tab to isolate periodic or source-based jobs.",
+                Theme::subtitle(),
+            )),
+        ])
+        .block(Theme::panel(Theme::panel_title("Cron job manager")));
+        frame.render_widget(filter_bar, header[0]);
+
+        let system_count = self
+            .jobs
+            .iter()
+            .filter(|job| matches!(job.source, CronSource::System(_)))
+            .count();
+        let user_count = self
+            .jobs
+            .iter()
+            .filter(|job| matches!(job.source, CronSource::User(_)))
+            .count();
+        let runtime = Paragraph::new(vec![
+            Line::from(vec![
+                Span::styled("Visible ", Theme::label()),
+                Span::styled(filtered_jobs.len().to_string(), Theme::badge_neutral()),
+            ]),
+            Line::from(vec![
+                Span::styled("System ", Theme::label()),
+                Span::styled(system_count.to_string(), Theme::badge_success()),
+                Span::raw(" "),
+                Span::styled("User ", Theme::label()),
+                Span::styled(user_count.to_string(), Theme::badge_neutral()),
+            ]),
+        ])
+        .block(Theme::panel_alt(Theme::panel_title("Runtime")));
+        frame.render_widget(runtime, header[1]);
+
+        let content = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([Constraint::Percentage(64), Constraint::Percentage(36)])
+            .split(chunks[1]);
+
         let items: Vec<ListItem> = filtered_jobs
             .iter()
             .map(|(_, job)| {
@@ -499,18 +532,66 @@ impl Component for CronComponent {
             .collect();
 
         let list = List::new(items)
-            .block(Block::default().borders(Borders::ALL))
+            .block(Theme::panel_alt(Theme::panel_title("Scheduled jobs")))
             .highlight_style(Theme::list_selected())
             .highlight_symbol("▶ ");
 
         let mut state = self.list_state.clone();
-        frame.render_stateful_widget(list, chunks[1], &mut state);
+        frame.render_stateful_widget(list, content[0], &mut state);
 
-        // Status bar
+        let inspector_lines = if let Some((_, job)) = self.selected_job() {
+            let source_path = match &job.source {
+                CronSource::System(p) => p.clone(),
+                CronSource::User(u) => format!("/var/spool/cron/crontabs/{}", u),
+            };
+            vec![
+                Line::from(vec![
+                    Span::styled("JOB", Theme::badge_info()),
+                    Span::raw(" "),
+                    Span::styled(self.format_schedule(job), Theme::title()),
+                ]),
+                Line::from(""),
+                Line::from(vec![
+                    Span::styled("Enabled ", Theme::label()),
+                    if job.enabled {
+                        Span::styled(" YES ", Theme::badge_success())
+                    } else {
+                        Span::styled(" NO ", Theme::badge_warning())
+                    },
+                ]),
+                Line::from(vec![
+                    Span::styled("Command ", Theme::label()),
+                    Span::raw(&job.command),
+                ]),
+                Line::from(vec![
+                    Span::styled("Source ", Theme::label()),
+                    Span::raw(source_path),
+                ]),
+                Line::from(""),
+                Line::from(Span::styled("Raw expression", Theme::eyebrow())),
+                Line::from(job.raw_line.clone()),
+            ]
+        } else {
+            vec![
+                Line::from(Span::styled("No job selected", Theme::muted())),
+                Line::from(""),
+                Line::from("Choose a cron entry to inspect its source and raw expression."),
+            ]
+        };
+        frame.render_widget(
+            Paragraph::new(inspector_lines)
+                .block(Theme::panel_alt(Theme::panel_title("Inspector"))),
+            content[1],
+        );
+
         let status_content = if let Some((msg, is_error)) = &self.status_message {
             Line::from(Span::styled(
                 msg.clone(),
-                Style::default().fg(if *is_error { Color::Red } else { Color::Green }),
+                if *is_error {
+                    Theme::error()
+                } else {
+                    Theme::success()
+                },
             ))
         } else if let Some((_, job)) = self.selected_job() {
             let source_path = match &job.source {
@@ -518,14 +599,15 @@ impl Component for CronComponent {
                 CronSource::User(u) => format!("/var/spool/cron/crontabs/{}", u),
             };
             Line::from(vec![
-                Span::styled("Source: ", Style::default().fg(Color::Cyan)),
+                Span::styled("Source: ", Theme::muted()),
                 Span::raw(source_path),
             ])
         } else {
-            Line::from(Span::raw("No job selected"))
+            Line::from(Span::styled("No job selected", Theme::muted()))
         };
 
-        let status = Paragraph::new(status_content).block(Block::default().borders(Borders::ALL));
+        let status =
+            Paragraph::new(status_content).block(Theme::panel_alt(Theme::panel_title("Status")));
         frame.render_widget(status, chunks[2]);
     }
 

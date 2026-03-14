@@ -1,9 +1,8 @@
 use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
-    style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, List, ListItem, ListState, Paragraph, Wrap},
+    widgets::{List, ListItem, ListState, Paragraph, Wrap},
     Frame,
 };
 use std::fs;
@@ -204,6 +203,43 @@ impl PackageBrowserComponent {
         self.load_packages();
         self.apply_filter();
     }
+
+    fn render_selected_package(&self, frame: &mut Frame, area: Rect) {
+        let lines = if let Some(pkg) = self.selected_package() {
+            vec![
+                Line::from(Span::styled(&pkg.name, Theme::title())),
+                Line::from(vec![
+                    Span::styled("Version ", Theme::muted()),
+                    Span::raw(&pkg.version),
+                ]),
+                Line::from(vec![
+                    Span::styled("Arch ", Theme::muted()),
+                    Span::raw(&pkg.arch),
+                ]),
+                Line::from(vec![
+                    Span::styled("Sizes ", Theme::muted()),
+                    Span::raw(format!(
+                        "{} / {}",
+                        pkg.size_compressed, pkg.size_uncompressed
+                    )),
+                ]),
+                Line::from(""),
+                Line::from(Span::styled("Description", Theme::muted())),
+                Line::from(pkg.description.clone()),
+            ]
+        } else {
+            vec![
+                Line::from(Span::styled("No package selected", Theme::muted())),
+                Line::from(""),
+                Line::from("Select an installed package to inspect metadata."),
+            ]
+        };
+
+        frame.render_widget(
+            Paragraph::new(lines).block(Theme::panel_alt(Theme::panel_title("Inspector"))),
+            area,
+        );
+    }
 }
 
 impl Component for PackageBrowserComponent {
@@ -316,49 +352,82 @@ impl Component for PackageBrowserComponent {
         let chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Length(3),
+                Constraint::Length(4),
                 Constraint::Min(10),
                 Constraint::Length(3),
             ])
             .split(area);
 
-        // Search bar
+        let header = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([Constraint::Percentage(58), Constraint::Percentage(42)])
+            .split(chunks[0]);
+
         let search_style = if self.is_searching {
-            Style::default().fg(Color::Yellow)
+            Theme::accent()
         } else {
-            Style::default()
+            Theme::value()
         };
         let search_bar = Paragraph::new(Line::from(vec![
-            Span::styled("Search: ", Style::default().fg(Color::Cyan)),
+            Span::styled("Query ", Theme::label()),
             Span::styled(&self.search_query, search_style),
             if self.is_searching {
-                Span::styled("_", Style::default().fg(Color::Yellow))
+                Span::styled(" _", Theme::accent())
             } else {
                 Span::raw("")
             },
             Span::styled(
                 format!(
-                    "  ({}/{} packages)",
+                    "  {}/{} packages",
                     self.filtered_packages.len(),
                     self.packages.len()
                 ),
-                Style::default().fg(Color::DarkGray),
+                Theme::badge_neutral(),
             ),
         ]))
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .title(" Installed Packages "),
-        );
-        frame.render_widget(search_bar, chunks[0]);
+        .block(Theme::panel(Theme::panel_title("Installed packages")));
+        frame.render_widget(search_bar, header[0]);
 
-        // Main content area
+        let runtime = Paragraph::new(vec![
+            Line::from(vec![
+                Span::styled("Mode ", Theme::muted()),
+                Span::styled(
+                    if self.view_mode == ViewMode::List {
+                        " LIST "
+                    } else {
+                        " DETAILS "
+                    },
+                    Theme::badge_neutral(),
+                ),
+                Span::raw(" "),
+                if self.is_searching {
+                    Span::styled(" SEARCH ", Theme::badge_warning())
+                } else {
+                    Span::styled(" IDLE ", Theme::badge_success())
+                },
+            ]),
+            Line::from(""),
+            Line::from(Span::styled(
+                "Browse installed packages, inspect metadata, then remove with confirmation.",
+                Theme::subtitle(),
+            )),
+        ])
+        .block(Theme::panel_alt(Theme::panel_title("Runtime")));
+        frame.render_widget(runtime, header[1]);
+
+        let content = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([Constraint::Percentage(62), Constraint::Percentage(38)])
+            .split(chunks[1]);
+
         if self.view_mode == ViewMode::Details {
             if let Some(pkg) = self.selected_package() {
-                self.render_details(frame, chunks[1], pkg);
+                self.render_details(frame, content[0], pkg);
+                self.render_selected_package(frame, content[1]);
             }
         } else {
-            self.render_list(frame, chunks[1]);
+            self.render_list(frame, content[0]);
+            self.render_selected_package(frame, content[1]);
         }
 
         // Status bar
@@ -372,28 +441,33 @@ impl Component for PackageBrowserComponent {
                             .map(|p| p.name.as_str())
                             .unwrap_or("?")
                     ),
-                    Style::default().fg(Color::Yellow),
+                    Theme::warning(),
                 ),
                 Span::raw("[Y]es / [N]o"),
             ])
         } else if let Some((msg, is_error)) = &self.status_message {
             Line::from(Span::styled(
                 msg.clone(),
-                Style::default().fg(if *is_error { Color::Red } else { Color::Green }),
+                if *is_error {
+                    Theme::error()
+                } else {
+                    Theme::success()
+                },
             ))
         } else if let Some(pkg) = self.selected_package() {
             Line::from(vec![
-                Span::styled("Size: ", Style::default().fg(Color::Cyan)),
+                Span::styled("Footprint ", Theme::label()),
                 Span::raw(format!(
                     "{} compressed, {} installed",
                     pkg.size_compressed, pkg.size_uncompressed
                 )),
             ])
         } else {
-            Line::from(Span::raw("No package selected"))
+            Line::from(Span::styled("No package selected", Theme::muted()))
         };
 
-        let status = Paragraph::new(status_content).block(Block::default().borders(Borders::ALL));
+        let status =
+            Paragraph::new(status_content).block(Theme::panel_alt(Theme::panel_title("Status")));
         frame.render_widget(status, chunks[2]);
     }
 
@@ -425,18 +499,9 @@ impl PackageBrowserComponent {
             .map(|pkg| {
                 ListItem::new(vec![
                     Line::from(vec![
-                        Span::styled(
-                            format!("{:<30}", pkg.name),
-                            Style::default().add_modifier(Modifier::BOLD),
-                        ),
-                        Span::styled(
-                            format!(" {:<15}", pkg.version),
-                            Style::default().fg(Color::Green),
-                        ),
-                        Span::styled(
-                            format!(" {:<10}", pkg.arch),
-                            Style::default().fg(Color::Cyan),
-                        ),
+                        Span::styled(format!("{:<28}", pkg.name), Theme::title()),
+                        Span::styled(format!(" {:<14}", pkg.version), Theme::success()),
+                        Span::styled(format!(" {:<10}", pkg.arch), Theme::accent()),
                     ]),
                     Line::from(Span::styled(
                         format!(
@@ -447,14 +512,14 @@ impl PackageBrowserComponent {
                                 pkg.description.clone()
                             }
                         ),
-                        Style::default().fg(Color::DarkGray),
+                        Theme::muted(),
                     )),
                 ])
             })
             .collect();
 
         let list = List::new(items)
-            .block(Block::default().borders(Borders::ALL))
+            .block(Theme::panel_alt(Theme::panel_title("Package roster")))
             .highlight_style(Theme::list_selected())
             .highlight_symbol("▶ ");
 
@@ -463,47 +528,48 @@ impl PackageBrowserComponent {
     }
 
     fn render_details(&self, frame: &mut Frame, area: Rect, pkg: &InstalledPackage) {
-        let block = Block::default()
-            .borders(Borders::ALL)
-            .title(format!(" Package: {} ", pkg.name));
+        let block = Theme::panel(Theme::panel_title(format!("Package {}", pkg.name)));
 
         let inner = block.inner(area);
         frame.render_widget(block, area);
 
         let details = vec![
+            Line::from(vec![Span::styled("Identity", Theme::eyebrow())]),
             Line::from(vec![
-                Span::styled("Name:         ", Style::default().fg(Color::Cyan)),
+                Span::styled("Name         ", Theme::label()),
                 Span::raw(&pkg.name),
             ]),
             Line::from(vec![
-                Span::styled("Version:      ", Style::default().fg(Color::Cyan)),
+                Span::styled("Version      ", Theme::label()),
                 Span::raw(&pkg.version),
             ]),
             Line::from(vec![
-                Span::styled("Architecture: ", Style::default().fg(Color::Cyan)),
+                Span::styled("Architecture ", Theme::label()),
                 Span::raw(&pkg.arch),
             ]),
             Line::from(vec![
-                Span::styled("Build:        ", Style::default().fg(Color::Cyan)),
+                Span::styled("Build        ", Theme::label()),
                 Span::raw(&pkg.build),
             ]),
             Line::from(vec![
-                Span::styled("Full Name:    ", Style::default().fg(Color::Cyan)),
+                Span::styled("Full name    ", Theme::label()),
                 Span::raw(&pkg.full_name),
             ]),
             Line::from(""),
+            Line::from(vec![Span::styled("Payload", Theme::eyebrow())]),
             Line::from(vec![
-                Span::styled("Compressed:   ", Style::default().fg(Color::Cyan)),
+                Span::styled("Compressed   ", Theme::label()),
                 Span::raw(&pkg.size_compressed),
             ]),
             Line::from(vec![
-                Span::styled("Uncompressed: ", Style::default().fg(Color::Cyan)),
+                Span::styled("Uncompressed ", Theme::label()),
                 Span::raw(&pkg.size_uncompressed),
             ]),
             Line::from(""),
+            Line::from(Span::styled("Description", Theme::eyebrow())),
             Line::from(Span::styled(
-                "Description:",
-                Style::default().fg(Color::Cyan),
+                "Package notes from /var/log/packages",
+                Theme::subtitle(),
             )),
             Line::from(""),
         ];

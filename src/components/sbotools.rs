@@ -2,7 +2,7 @@ use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     text::Line,
-    widgets::{Block, Borders, Paragraph},
+    widgets::Paragraph,
     Frame,
 };
 
@@ -151,25 +151,58 @@ impl Component for SbotoolsComponent {
         let chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Length(3),  // Title
+                Constraint::Length(4),  // Title
                 Constraint::Length(12), // Progress steps
                 Constraint::Min(5),     // Output
             ])
             .split(area);
 
-        // Title
-        let title = Paragraph::new(Line::from(vec![ratatui::text::Span::styled(
-            "sbotools Installer",
-            Theme::title(),
-        )]))
-        .block(Block::default().borders(Borders::BOTTOM));
-        frame.render_widget(title, chunks[0]);
+        let header = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([Constraint::Percentage(62), Constraint::Percentage(38)])
+            .split(chunks[0]);
+
+        let title = Paragraph::new(vec![
+            Line::from(ratatui::text::Span::styled(
+                "sbotools Installer",
+                Theme::title(),
+            )),
+            Line::from(ratatui::text::Span::styled(
+                "Bootstrap the SlackBuilds toolchain and keep the UI responsive while it runs.",
+                Theme::subtitle(),
+            )),
+        ])
+        .block(Theme::panel(Theme::panel_title("Bootstrap")));
+        frame.render_widget(title, header[0]);
+
+        let complete = self
+            .steps
+            .iter()
+            .filter(|step| matches!(step.status, StepStatus::Complete))
+            .count();
+        let runtime = Paragraph::new(vec![
+            Line::from(vec![
+                ratatui::text::Span::styled("Completed ", Theme::label()),
+                ratatui::text::Span::styled(complete.to_string(), Theme::badge_success()),
+            ]),
+            Line::from(vec![
+                ratatui::text::Span::styled("State ", Theme::label()),
+                if self.is_running {
+                    ratatui::text::Span::styled(" RUNNING ", Theme::badge_warning())
+                } else {
+                    ratatui::text::Span::styled(" READY ", Theme::badge_success())
+                },
+            ]),
+        ])
+        .block(Theme::panel_alt(Theme::panel_title("Runtime")));
+        frame.render_widget(runtime, header[1]);
 
         // Description
         let desc = Paragraph::new(vec![
-            Line::from(""),
             Line::from("This will install sbopkg and sbotools for SlackBuilds.org packages."),
-            Line::from(""),
+            Line::from(
+                "The task runner stays interactive while each bootstrap step streams output.",
+            ),
         ])
         .style(Theme::muted());
 
@@ -181,15 +214,12 @@ impl Component for SbotoolsComponent {
         frame.render_widget(desc, progress_chunks[0]);
 
         // Progress steps
-        let progress = ProgressList::new(&self.steps).block(
-            Block::default()
-                .borders(Borders::ALL)
-                .title("Installation Steps"),
-        );
+        let progress = ProgressList::new(&self.steps)
+            .block(Theme::panel(Theme::panel_title("Installation steps")));
         frame.render_widget(progress, progress_chunks[1]);
 
         // Output
-        let output_block = Block::default().borders(Borders::ALL).title("Output");
+        let output_block = Theme::panel_alt(Theme::panel_title("Output"));
         let inner = output_block.inner(chunks[2]);
         frame.render_widget(output_block, chunks[2]);
 

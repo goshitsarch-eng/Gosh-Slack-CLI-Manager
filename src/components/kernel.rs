@@ -1,9 +1,8 @@
 use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
-    style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, List, ListItem, ListState, Paragraph},
+    widgets::{List, ListItem, ListState, Paragraph},
     Frame,
 };
 use std::fs;
@@ -229,6 +228,55 @@ impl KernelComponent {
         self.status_message = Some((message, is_error));
     }
 
+    fn render_selected_kernel(&self, frame: &mut Frame, area: Rect) {
+        let lines = if let Some(kernel) = self.selected_kernel() {
+            vec![
+                Line::from(vec![
+                    Span::styled("KERNEL", Theme::badge_info()),
+                    Span::raw(" "),
+                    Span::styled(&kernel.version, Theme::title()),
+                ]),
+                Line::from(vec![
+                    Span::styled("Variant ", Theme::label()),
+                    Span::styled(&kernel.variant, Theme::badge_neutral()),
+                ]),
+                Line::from(vec![
+                    Span::styled("Size ", Theme::label()),
+                    Span::raw(Self::format_size(kernel.size)),
+                ]),
+                Line::from(vec![
+                    Span::styled("Path ", Theme::label()),
+                    Span::raw(&kernel.path),
+                ]),
+                Line::from(""),
+                Line::from(Span::styled("Flags", Theme::eyebrow())),
+                Line::from(if kernel.is_current {
+                    "RUNNING kernel image"
+                } else {
+                    "Not the running image"
+                }),
+                Line::from(if kernel.is_default {
+                    "Configured default boot target"
+                } else {
+                    "Not the configured default"
+                }),
+                Line::from(""),
+                Line::from(Span::styled("Actions", Theme::eyebrow())),
+                Line::from("d/Enter  set default"),
+                Line::from("l        run lilo"),
+            ]
+        } else {
+            vec![
+                Line::from(Span::styled("No kernel selected", Theme::muted())),
+                Line::from(""),
+                Line::from("Choose a kernel image to inspect its boot role."),
+            ]
+        };
+
+        let panel = Paragraph::new(lines).block(Theme::panel_alt(Theme::panel_title("Inspector")));
+        frame.render_widget(panel, area);
+    }
+
     pub fn bootloader(&self) -> BootloaderType {
         self.bootloader
     }
@@ -311,29 +359,45 @@ impl Component for KernelComponent {
             BootloaderType::Unknown => "Unknown",
         };
 
+        let header = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([Constraint::Percentage(56), Constraint::Percentage(44)])
+            .split(chunks[0]);
+
         let info = Paragraph::new(vec![
             Line::from(vec![
-                Span::styled("Running Kernel: ", Style::default().fg(Color::Cyan)),
-                Span::styled(
-                    &self.current_kernel,
-                    Style::default()
-                        .fg(Color::Green)
-                        .add_modifier(Modifier::BOLD),
-                ),
+                Span::styled("Running ", Theme::label()),
+                Span::styled(&self.current_kernel, Theme::badge_success()),
             ]),
             Line::from(vec![
-                Span::styled("Bootloader:     ", Style::default().fg(Color::Cyan)),
-                Span::raw(bootloader_str),
+                Span::styled("Bootloader ", Theme::label()),
+                Span::styled(bootloader_str, Theme::badge_neutral()),
             ]),
         ])
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .title(" Kernel Manager "),
-        );
-        frame.render_widget(info, chunks[0]);
+        .block(Theme::panel(Theme::panel_title("Kernel manager")));
+        frame.render_widget(info, header[0]);
 
-        // Kernel list
+        let boot_path = Paragraph::new(vec![
+            Line::from(vec![
+                Span::styled("Installed ", Theme::label()),
+                Span::styled(self.kernels.len().to_string(), Theme::badge_success()),
+                Span::raw(" "),
+                Span::styled("Bootloader ", Theme::label()),
+                Span::styled(bootloader_str, Theme::badge_neutral()),
+            ]),
+            Line::from(Span::styled(
+                "Default changes rewrite config first; run lilo afterward if LILO is in play.",
+                Theme::subtitle(),
+            )),
+        ])
+        .block(Theme::panel_alt(Theme::panel_title("Boot path")));
+        frame.render_widget(boot_path, header[1]);
+
+        let content = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([Constraint::Percentage(64), Constraint::Percentage(36)])
+            .split(chunks[1]);
+
         let items: Vec<ListItem> = self
             .kernels
             .iter()
@@ -341,38 +405,26 @@ impl Component for KernelComponent {
                 let mut status_parts = Vec::new();
 
                 if kernel.is_current {
-                    status_parts.push(Span::styled(
-                        " [RUNNING]",
-                        Style::default().fg(Color::Green),
-                    ));
+                    status_parts.push(Span::styled(" RUNNING ", Theme::badge_success()));
                 }
                 if kernel.is_default {
-                    status_parts.push(Span::styled(
-                        " [DEFAULT]",
-                        Style::default().fg(Color::Yellow),
-                    ));
+                    status_parts.push(Span::styled(" DEFAULT ", Theme::badge_warning()));
                 }
 
                 ListItem::new(vec![
                     Line::from(
                         vec![
-                            Span::styled(
-                                format!("{:<40}", kernel.version),
-                                Style::default().add_modifier(Modifier::BOLD),
-                            ),
-                            Span::styled(
-                                format!("{:<10}", kernel.variant),
-                                Style::default().fg(Color::Cyan),
-                            ),
+                            Span::styled(format!("{:<40}", kernel.version), Theme::title()),
+                            Span::styled(format!("{:<10}", kernel.variant), Theme::accent()),
                         ]
                         .into_iter()
                         .chain(status_parts)
                         .collect::<Vec<_>>(),
                     ),
                     Line::from(vec![
-                        Span::styled("    Path: ", Style::default().fg(Color::DarkGray)),
+                        Span::styled("    Path ", Theme::muted()),
                         Span::raw(&kernel.path),
-                        Span::styled("  Size: ", Style::default().fg(Color::DarkGray)),
+                        Span::styled("  Size ", Theme::muted()),
                         Span::raw(Self::format_size(kernel.size)),
                     ]),
                 ])
@@ -380,16 +432,16 @@ impl Component for KernelComponent {
             .collect();
 
         let list = List::new(items)
-            .block(
-                Block::default()
-                    .borders(Borders::ALL)
-                    .title(format!(" Installed Kernels ({}) ", self.kernels.len())),
-            )
+            .block(Theme::panel_alt(Theme::panel_title(format!(
+                "Installed kernels ({})",
+                self.kernels.len()
+            ))))
             .highlight_style(Theme::list_selected())
             .highlight_symbol("▶ ");
 
         let mut state = self.list_state.clone();
-        frame.render_stateful_widget(list, chunks[1], &mut state);
+        frame.render_stateful_widget(list, content[0], &mut state);
+        self.render_selected_kernel(frame, content[1]);
 
         // Status bar
         let status_content = if self.show_confirm {
@@ -399,22 +451,27 @@ impl Component for KernelComponent {
                 None => "Confirm action?".to_string(),
             };
             Line::from(vec![
-                Span::styled(action_desc, Style::default().fg(Color::Yellow)),
+                Span::styled(action_desc, Theme::warning()),
                 Span::raw(" [Y]es / [N]o"),
             ])
         } else if let Some((msg, is_error)) = &self.status_message {
             Line::from(Span::styled(
                 msg.clone(),
-                Style::default().fg(if *is_error { Color::Red } else { Color::Green }),
+                if *is_error {
+                    Theme::error()
+                } else {
+                    Theme::success()
+                },
             ))
         } else {
             Line::from(Span::styled(
                 "Press 'd' to set default, 'l' to run lilo",
-                Style::default().fg(Color::DarkGray),
+                Theme::muted(),
             ))
         };
 
-        let status = Paragraph::new(status_content).block(Block::default().borders(Borders::ALL));
+        let status =
+            Paragraph::new(status_content).block(Theme::panel_alt(Theme::panel_title("Status")));
         frame.render_widget(status, chunks[2]);
     }
 

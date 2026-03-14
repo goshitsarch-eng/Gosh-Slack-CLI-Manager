@@ -34,10 +34,10 @@ impl AppLayout {
         let chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Length(2), // Header with title
-                Constraint::Length(2), // Tabs (two rows for F1-F6 and F7-F12 + Ctrl shortcuts)
+                Constraint::Length(4), // Header
+                Constraint::Length(4), // Navigation
                 Constraint::Min(10),   // Main content
-                Constraint::Length(1), // Status bar
+                Constraint::Length(1), // Status rail
             ])
             .split(area);
 

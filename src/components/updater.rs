@@ -1,8 +1,8 @@
 use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
-    text::Line,
-    widgets::{Block, Borders, Paragraph},
+    text::{Line, Span},
+    widgets::Paragraph,
     Frame,
 };
 use std::fs;
@@ -386,6 +386,56 @@ impl UpdaterComponent {
         lines
     }
 
+    fn step_totals(&self) -> (usize, usize, usize) {
+        let mut complete = 0;
+        let mut running = 0;
+        let mut failed = 0;
+
+        for step in &self.steps {
+            match step.status {
+                StepStatus::Complete => complete += 1,
+                StepStatus::Running => running += 1,
+                StepStatus::Failed(_) => failed += 1,
+                StepStatus::Pending => {}
+            }
+        }
+
+        (complete, running, failed)
+    }
+
+    fn render_summary_panel(&self, frame: &mut Frame, area: Rect) {
+        let (complete, running, failed) = self.step_totals();
+        let next_action = if self.show_lilo_confirm {
+            "Awaiting bootloader confirmation"
+        } else if self.show_summary {
+            "Review summary before leaving"
+        } else if self.is_running {
+            "Streaming package manager output"
+        } else {
+            "Ready to start maintenance cycle"
+        };
+
+        let lines = vec![
+            Line::from(vec![
+                Span::styled("Done ", Theme::label()),
+                Span::styled(format!("{complete}"), Theme::badge_success()),
+                Span::raw(" "),
+                Span::styled("Running ", Theme::label()),
+                Span::styled(format!("{running}"), Theme::badge_neutral()),
+                Span::raw(" "),
+                Span::styled("Failed ", Theme::label()),
+                Span::styled(format!("{failed}"), Theme::badge_warning()),
+            ]),
+            Line::from(vec![
+                Span::styled("Next ", Theme::label()),
+                Span::styled(next_action, Theme::subtitle()),
+            ]),
+        ];
+
+        let panel = Paragraph::new(lines).block(Theme::panel_alt(Theme::panel_title("Run state")));
+        frame.render_widget(panel, area);
+    }
+
     fn show_changelog_preview(&mut self) {
         let Some(path) = self.changelog_path.clone() else {
             self.add_output("No local ChangeLog.txt found.".to_string());
@@ -408,9 +458,7 @@ impl UpdaterComponent {
         frame.render_widget(ratatui::widgets::Clear, dialog_area);
 
         if self.kernel_updated {
-            let dialog = Block::default()
-                .title(" !! KERNEL UPDATED - BOOTLOADER REQUIRED !! ")
-                .borders(Borders::ALL)
+            let dialog = Theme::panel(Theme::panel_title("Kernel updated - bootloader required"))
                 .border_style(Theme::error());
             let inner = dialog.inner(dialog_area);
             frame.render_widget(dialog, dialog_area);
@@ -455,9 +503,7 @@ impl UpdaterComponent {
             .style(Theme::default());
             frame.render_widget(text, inner);
         } else {
-            let dialog = Block::default()
-                .title(" Update Bootloader? ")
-                .borders(Borders::ALL)
+            let dialog = Theme::panel(Theme::panel_title("Update bootloader"))
                 .border_style(Theme::warning());
             let inner = dialog.inner(dialog_area);
             frame.render_widget(dialog, dialog_area);
@@ -501,10 +547,7 @@ impl UpdaterComponent {
             Theme::success()
         };
 
-        let dialog = Block::default()
-            .title(title)
-            .borders(Borders::ALL)
-            .border_style(border_style);
+        let dialog = Theme::panel(Theme::panel_title(title)).border_style(border_style);
         let inner = dialog.inner(dialog_area);
         frame.render_widget(dialog, dialog_area);
 
@@ -663,41 +706,57 @@ impl Component for UpdaterComponent {
         let chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Length(3),
-                Constraint::Length(10),
-                Constraint::Length(8),
+                Constraint::Length(5),
+                Constraint::Length(12),
                 Constraint::Min(5),
             ])
             .split(area);
 
-        let bootloader_info = format!(
-            " [Track: {} | Bootloader: {}]",
-            self.release_track_label(),
-            self.bootloader.name()
-        );
-        let title = Paragraph::new(Line::from(vec![
-            ratatui::text::Span::styled("Slackware System Updater", Theme::title()),
-            ratatui::text::Span::styled(bootloader_info, Theme::muted()),
-        ]))
-        .block(Block::default().borders(Borders::BOTTOM));
-        frame.render_widget(title, chunks[0]);
+        let header = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([Constraint::Percentage(62), Constraint::Percentage(38)])
+            .split(chunks[0]);
 
-        let progress = ProgressList::new(&self.steps)
-            .block(Block::default().borders(Borders::ALL).title("Progress"));
-        frame.render_widget(progress, chunks[1]);
+        let title = Paragraph::new(vec![
+            Line::from(vec![
+                ratatui::text::Span::styled("Slackware System Updater", Theme::title()),
+                ratatui::text::Span::raw(" "),
+                ratatui::text::Span::styled(
+                    format!(" {} ", self.release_track_label()),
+                    Theme::badge_neutral(),
+                ),
+                ratatui::text::Span::raw(" "),
+                ratatui::text::Span::styled(
+                    format!(" {} ", self.bootloader.name()),
+                    Theme::badge_info(),
+                ),
+            ]),
+            Line::from(ratatui::text::Span::styled(
+                "Review the changelog, run the slackpkg cycle, then resolve bootloader and config fallout.",
+                Theme::subtitle(),
+            )),
+        ])
+        .block(Theme::panel(Theme::panel_title("Update runway")));
+        frame.render_widget(title, header[0]);
+        self.render_summary_panel(frame, header[1]);
+
+        let middle = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([Constraint::Percentage(42), Constraint::Percentage(58)])
+            .split(chunks[1]);
+
+        let progress =
+            ProgressList::new(&self.steps).block(Theme::panel(Theme::panel_title("Progress")));
+        frame.render_widget(progress, middle[0]);
 
         let advisories = Paragraph::new(self.advisory_lines())
-            .style(Theme::muted())
-            .block(
-                Block::default()
-                    .borders(Borders::ALL)
-                    .title("Maintenance Notes"),
-            );
-        frame.render_widget(advisories, chunks[2]);
+            .style(Theme::subtitle())
+            .block(Theme::panel_alt(Theme::panel_title("Maintenance notes")));
+        frame.render_widget(advisories, middle[1]);
 
-        let output_block = Block::default().borders(Borders::ALL).title("Output");
-        let inner = output_block.inner(chunks[3]);
-        frame.render_widget(output_block, chunks[3]);
+        let output_block = Theme::panel_alt(Theme::panel_title("Output"));
+        let inner = output_block.inner(chunks[2]);
+        frame.render_widget(output_block, chunks[2]);
 
         let visible = inner.height as usize;
         let start = self.output_lines.len().saturating_sub(visible);
@@ -711,7 +770,7 @@ impl Component for UpdaterComponent {
                 }
             })
             .collect();
-        let output = Paragraph::new(lines).style(Theme::muted());
+        let output = Paragraph::new(lines).style(Theme::default());
         frame.render_widget(output, inner);
 
         if self.show_lilo_confirm {

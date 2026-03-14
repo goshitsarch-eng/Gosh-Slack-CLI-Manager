@@ -1,9 +1,8 @@
 use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
-    style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, List, ListItem, ListState, Paragraph},
+    widgets::{List, ListItem, ListState, Paragraph},
     Frame,
 };
 use std::fs;
@@ -316,18 +315,14 @@ impl Component for NetworkComponent {
             NetworkMode::Dns => " Interfaces  [DNS]",
         };
         let mode_bar = Paragraph::new(Line::from(vec![
-            Span::styled("View: ", Style::default().fg(Color::Cyan)),
+            Span::styled("View ", Theme::label()),
             Span::raw(mode_text),
-            Span::styled(
-                format!("  Hostname: {}", self.hostname),
-                Style::default().fg(Color::DarkGray),
-            ),
+            Span::raw(" "),
+            Span::styled(" HOST ", Theme::badge_neutral()),
+            Span::raw(" "),
+            Span::styled(self.hostname.as_str(), Theme::subtitle()),
         ]))
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .title(" Network Configuration "),
-        );
+        .block(Theme::panel(Theme::panel_title("Network fabric")));
         frame.render_widget(mode_bar, chunks[0]);
 
         // Main content
@@ -342,22 +337,24 @@ impl Component for NetworkComponent {
         // Status bar
         let status_content = if self.show_confirm {
             Line::from(vec![
-                Span::styled("Restart network? ", Style::default().fg(Color::Yellow)),
+                Span::styled("Restart network? ", Theme::warning()),
                 Span::raw("[Y]es / [N]o"),
             ])
         } else if let Some((msg, is_error)) = &self.status_message {
             Line::from(Span::styled(
                 msg.clone(),
-                Style::default().fg(if *is_error { Color::Red } else { Color::Green }),
+                if *is_error {
+                    Theme::error()
+                } else {
+                    Theme::success()
+                },
             ))
         } else {
-            Line::from(Span::styled(
-                "Press 'r' to restart network",
-                Style::default().fg(Color::DarkGray),
-            ))
+            Line::from(Span::styled("Press 'r' to restart network", Theme::muted()))
         };
 
-        let status = Paragraph::new(status_content).block(Block::default().borders(Borders::ALL));
+        let status =
+            Paragraph::new(status_content).block(Theme::panel_alt(Theme::panel_title("Status")));
         frame.render_widget(status, chunks[3]);
     }
 
@@ -375,31 +372,47 @@ impl Component for NetworkComponent {
 }
 
 impl NetworkComponent {
+    fn selected_interface(&self) -> Option<&NetworkInterface> {
+        self.list_state
+            .selected()
+            .and_then(|idx| self.interfaces.get(idx))
+    }
+
+    fn selected_dns(&self) -> Option<&str> {
+        self.list_state
+            .selected()
+            .and_then(|idx| self.dns_servers.get(idx))
+            .map(String::as_str)
+    }
+
     fn render_interfaces(&self, frame: &mut Frame, area: Rect) {
+        let content = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([Constraint::Percentage(62), Constraint::Percentage(38)])
+            .split(area);
+
         let items: Vec<ListItem> = self
             .interfaces
             .iter()
             .map(|iface| {
                 let status = if iface.is_up {
-                    Span::styled("UP  ", Style::default().fg(Color::Green))
+                    Span::styled(" UP ", Theme::badge_success())
                 } else {
-                    Span::styled("DOWN", Style::default().fg(Color::Red))
+                    Span::styled(" DOWN ", Theme::badge_warning())
                 };
 
                 let dhcp = if iface.use_dhcp { "DHCP" } else { "Static" };
 
                 ListItem::new(vec![
                     Line::from(vec![
-                        Span::styled(
-                            format!("{:<12}", iface.name),
-                            Style::default().add_modifier(Modifier::BOLD),
-                        ),
+                        Span::styled(format!("{:<12}", iface.name), Theme::title()),
                         status,
-                        Span::styled(format!(" {:<6}", dhcp), Style::default().fg(Color::Cyan)),
+                        Span::raw(" "),
+                        Span::styled(format!(" {} ", dhcp), Theme::badge_neutral()),
                         Span::raw(format!(" {}", iface.mac_address)),
                     ]),
                     Line::from(vec![
-                        Span::styled("    IP: ", Style::default().fg(Color::DarkGray)),
+                        Span::styled("    Address ", Theme::muted()),
                         Span::raw(if iface.ip_address.is_empty() {
                             "Not assigned".to_string()
                         } else {
@@ -411,26 +424,85 @@ impl NetworkComponent {
             .collect();
 
         let list = List::new(items)
-            .block(
-                Block::default()
-                    .borders(Borders::ALL)
-                    .title(" Network Interfaces "),
-            )
+            .block(Theme::panel(Theme::panel_title("Interfaces")))
             .highlight_style(Theme::list_selected())
             .highlight_symbol("▶ ");
 
         let mut state = self.list_state.clone();
-        frame.render_stateful_widget(list, area, &mut state);
+        frame.render_stateful_widget(list, content[0], &mut state);
+
+        let inspector_lines = if let Some(iface) = self.selected_interface() {
+            vec![
+                Line::from(vec![
+                    Span::styled("INTERFACE", Theme::badge_info()),
+                    Span::raw(" "),
+                    Span::styled(&iface.name, Theme::title()),
+                ]),
+                Line::from(""),
+                Line::from(vec![
+                    Span::styled("Link ", Theme::label()),
+                    if iface.is_up {
+                        Span::styled(" UP ", Theme::badge_success())
+                    } else {
+                        Span::styled(" DOWN ", Theme::badge_warning())
+                    },
+                ]),
+                Line::from(vec![
+                    Span::styled("Address ", Theme::label()),
+                    Span::raw(if iface.ip_address.is_empty() {
+                        "not assigned".to_string()
+                    } else {
+                        format!("{}/{}", iface.ip_address, iface.netmask)
+                    }),
+                ]),
+                Line::from(vec![
+                    Span::styled("Mode ", Theme::label()),
+                    Span::styled(
+                        if iface.use_dhcp { " DHCP " } else { " STATIC " },
+                        Theme::badge_neutral(),
+                    ),
+                ]),
+                Line::from(vec![
+                    Span::styled("Gateway ", Theme::label()),
+                    Span::raw(if iface.gateway.is_empty() {
+                        self.default_gateway.clone()
+                    } else {
+                        iface.gateway.clone()
+                    }),
+                ]),
+                Line::from(vec![
+                    Span::styled("MAC ", Theme::label()),
+                    Span::raw(&iface.mac_address),
+                ]),
+            ]
+        } else {
+            vec![
+                Line::from(Span::styled("No interface selected", Theme::muted())),
+                Line::from(""),
+                Line::from("Choose an interface to inspect link state and addressing."),
+            ]
+        };
+
+        frame.render_widget(
+            Paragraph::new(inspector_lines)
+                .block(Theme::panel_alt(Theme::panel_title("Inspector"))),
+            content[1],
+        );
     }
 
     fn render_dns(&self, frame: &mut Frame, area: Rect) {
+        let content = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([Constraint::Percentage(58), Constraint::Percentage(42)])
+            .split(area);
+
         let items: Vec<ListItem> = self
             .dns_servers
             .iter()
             .enumerate()
             .map(|(i, server)| {
                 ListItem::new(Line::from(vec![
-                    Span::styled(format!("DNS {}: ", i + 1), Style::default().fg(Color::Cyan)),
+                    Span::styled(format!("DNS {} ", i + 1), Theme::accent()),
                     Span::raw(server),
                 ]))
             })
@@ -439,50 +511,103 @@ impl NetworkComponent {
         let list = if items.is_empty() {
             List::new(vec![ListItem::new(Span::styled(
                 "No DNS servers configured",
-                Style::default().fg(Color::DarkGray),
+                Theme::muted(),
             ))])
         } else {
             List::new(items)
         }
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .title(" DNS Servers (/etc/resolv.conf) "),
-        )
+        .block(Theme::panel(Theme::panel_title("DNS servers")))
         .highlight_style(Theme::list_selected())
         .highlight_symbol("▶ ");
 
         let mut state = self.list_state.clone();
-        frame.render_stateful_widget(list, area, &mut state);
+        frame.render_stateful_widget(list, content[0], &mut state);
+
+        let inspector_lines = if let Some(server) = self.selected_dns() {
+            vec![
+                Line::from(vec![
+                    Span::styled("RESOLVER", Theme::badge_info()),
+                    Span::raw(" "),
+                    Span::styled(server, Theme::title()),
+                ]),
+                Line::from(""),
+                Line::from(vec![
+                    Span::styled("Order ", Theme::label()),
+                    Span::raw(
+                        self.list_state
+                            .selected()
+                            .map(|idx| format!("#{}", idx + 1))
+                            .unwrap_or_else(|| "n/a".to_string()),
+                    ),
+                ]),
+                Line::from(vec![
+                    Span::styled("Source ", Theme::label()),
+                    Span::raw("/etc/resolv.conf"),
+                ]),
+                Line::from(""),
+                Line::from(Span::styled(
+                    "Higher entries are consulted first during name resolution.",
+                    Theme::subtitle(),
+                )),
+            ]
+        } else {
+            vec![
+                Line::from(Span::styled("No DNS server selected", Theme::muted())),
+                Line::from(""),
+                Line::from("Select a resolver entry to inspect its order and source."),
+            ]
+        };
+
+        frame.render_widget(
+            Paragraph::new(inspector_lines)
+                .block(Theme::panel_alt(Theme::panel_title("Inspector"))),
+            content[1],
+        );
     }
+
     fn render_info(&self, frame: &mut Frame, area: Rect) {
-        let block = Block::default()
-            .borders(Borders::ALL)
-            .title(" Network Info ");
+        let sections = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([Constraint::Percentage(54), Constraint::Percentage(46)])
+            .split(area);
 
-        let inner = block.inner(area);
-        frame.render_widget(block, area);
-
-        let info = vec![
+        let route_info = vec![
             Line::from(vec![
-                Span::styled("Default Gateway: ", Style::default().fg(Color::Cyan)),
-                Span::raw(&self.default_gateway),
+                Span::styled("Gateway ", Theme::label()),
+                Span::styled(&self.default_gateway, Theme::badge_neutral()),
             ]),
             Line::from(vec![
-                Span::styled("DNS Servers:     ", Style::default().fg(Color::Cyan)),
-                Span::raw(if self.dns_servers.is_empty() {
-                    "None".to_string()
-                } else {
-                    self.dns_servers.join(", ")
-                }),
+                Span::styled("Hostname ", Theme::label()),
+                Span::raw(&self.hostname),
             ]),
             Line::from(vec![
-                Span::styled("Config File:     ", Style::default().fg(Color::Cyan)),
-                Span::raw("/etc/rc.d/rc.inet1.conf"),
+                Span::styled("Interfaces ", Theme::label()),
+                Span::styled(self.interfaces.len().to_string(), Theme::badge_success()),
             ]),
         ];
+        frame.render_widget(
+            Paragraph::new(route_info).block(Theme::panel_alt(Theme::panel_title("Route summary"))),
+            sections[0],
+        );
 
-        let paragraph = Paragraph::new(info);
-        frame.render_widget(paragraph, inner);
+        let config_info = vec![
+            Line::from(vec![
+                Span::styled("Resolver count ", Theme::label()),
+                Span::styled(self.dns_servers.len().to_string(), Theme::badge_neutral()),
+            ]),
+            Line::from(vec![
+                Span::styled("Config ", Theme::label()),
+                Span::raw("/etc/rc.d/rc.inet1.conf"),
+            ]),
+            Line::from(Span::styled(
+                "Use Tab to switch between interface and DNS views.",
+                Theme::subtitle(),
+            )),
+        ];
+        frame.render_widget(
+            Paragraph::new(config_info)
+                .block(Theme::panel_alt(Theme::panel_title("Control plane"))),
+            sections[1],
+        );
     }
 }
