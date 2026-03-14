@@ -8,6 +8,19 @@ The format follows Keep a Changelog conventions and uses semantic-style release 
 
 No unreleased changes recorded yet.
 
+## [0.1.1] - 2026-03-13
+
+### Added
+
+- GitHub release automation that verifies the project, builds a prebuilt release binary, packages Slackware-friendly install artifacts, and uploads them to GitHub Releases.
+- A Slackware package build step that produces `slackware-cli-manager-<version>-x86_64-1.txz` for users who want native package installation instead of Rust tooling.
+- Portable release archives and `SHA256SUMS.txt` generation for users who prefer direct binary installation.
+
+### Changed
+
+- Documented prebuilt installation paths in the README so Slackware users can install from release assets without `cargo`, crates.io, or a Rust toolchain.
+- Wired release notes generation to `CHANGELOG.md` so tagged releases publish consistent notes automatically.
+
 ## [0.1.0] - 2026-03-13
 
 ### Added

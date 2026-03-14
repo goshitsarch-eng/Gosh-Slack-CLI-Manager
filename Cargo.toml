@@ -1,6 +1,6 @@
 [package]
 name = "slackware-cli-manager"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 authors = ["goshitsarch-eng <goshitsarch@gmail.com>"]
 description = "A TUI application for managing Slackware Linux - system updates, sbotools, user management, and more"
