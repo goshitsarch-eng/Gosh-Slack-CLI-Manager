@@ -46,22 +46,50 @@ Supported Slackware versions are detected from `/etc/slackware-version`. The cod
 
 ### Prebuilt release assets
 
-GitHub releases now publish two installable assets for tagged versions:
+Slackware users do not need Rust, `cargo`, or crates.io.
+
+Download release assets from the project's GitHub Releases page:
+
+- `slackware-cli-manager-<version>-x86_64-1.txz`
+- `slackware-cli-manager-v<version>-x86_64-unknown-linux-musl.tar.gz`
+- `SHA256SUMS.txt`
+
+GitHub releases publish two installable asset types for tagged versions:
 
 - a portable static binary archive for `x86_64`
 - a Slackware package: `slackware-cli-manager-<version>-x86_64-1.txz`
 
-Slackware package install:
+Recommended for Slackware: install the package with `upgradepkg`.
+
+Verify the download:
+
+```bash
+sha256sum -c SHA256SUMS.txt
+```
+
+Install or upgrade the Slackware package:
 
 ```bash
 sudo upgradepkg --install-new slackware-cli-manager-0.1.1-x86_64-1.txz
 ```
 
-Portable archive install:
+Portable archive install without package management:
 
 ```bash
 tar -xzf slackware-cli-manager-v0.1.1-x86_64-unknown-linux-musl.tar.gz
 sudo install -m 0755 slackware-cli-manager-v0.1.1-x86_64-unknown-linux-musl/slackware-cli-manager /usr/local/bin/slackware-cli-manager
+```
+
+Remove a package install:
+
+```bash
+sudo removepkg slackware-cli-manager
+```
+
+Remove a portable install:
+
+```bash
+sudo rm -f /usr/local/bin/slackware-cli-manager
 ```
 
 ### From crates.io
