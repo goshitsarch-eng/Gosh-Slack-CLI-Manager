@@ -19,7 +19,6 @@ pub mod sysinfo;
 
 use crossterm::event::KeyEvent;
 use ratatui::Frame;
-use tokio::sync::mpsc;
 
 use crate::app::Message;
 
@@ -39,15 +38,6 @@ pub trait Component {
 
     /// Called when component becomes inactive
     fn on_deactivate(&mut self) {}
-}
-
-/// Async component trait for components that execute commands
-pub trait AsyncComponent: Component {
-    /// Set the progress channel for async updates
-    fn set_progress_channel(&mut self, tx: mpsc::UnboundedSender<String>);
-
-    /// Check if a task is currently running
-    fn is_running(&self) -> bool;
 }
 
 /// The active tab in the main menu
@@ -75,6 +65,7 @@ pub enum Tab {
 }
 
 impl Tab {
+    #[cfg(test)]
     pub fn all() -> Vec<Tab> {
         vec![
             Tab::Updater,

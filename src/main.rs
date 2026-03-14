@@ -16,26 +16,22 @@ use ratatui::{backend::CrosstermBackend, Terminal};
 
 use app::App;
 use slackware::detect_version;
-use utils::check_root;
+use utils::root::is_root;
 
 const APP_NAME: &str = "Slackware CLI Manager";
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    // Check for root privileges
-    if let Err(e) = check_root() {
-        eprintln!("{}", e);
-        eprintln!("\nThis application requires root privileges to manage Slackware packages.");
-        eprintln!("Please run with: sudo {}", std::env::args().next().unwrap_or_default());
-        std::process::exit(1);
-    }
+    let running_as_root = is_root();
 
-    // Detect Slackware version
     let version = match detect_version() {
         Ok(v) => {
             println!("{} v{}", APP_NAME, VERSION);
             println!("Detected: {}", v.display_name());
+            if !running_as_root {
+                println!("Running without root privileges. Mutating actions will be disabled.");
+            }
             v
         }
         Err(e) => {
@@ -48,27 +44,18 @@ async fn main() -> anyhow::Result<()> {
     // Brief pause to show version info
     std::thread::sleep(Duration::from_millis(500));
 
-    // Setup terminal
+    install_panic_hook();
     enable_raw_mode()?;
     let mut stdout = io::stdout();
     execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
-    // Create app
-    let mut app = App::new(version);
+    let mut app = App::new(version, running_as_root);
 
-    // Run the app
     let result = run_app(&mut terminal, &mut app).await;
 
-    // Restore terminal
-    disable_raw_mode()?;
-    execute!(
-        terminal.backend_mut(),
-        LeaveAlternateScreen,
-        DisableMouseCapture
-    )?;
-    terminal.show_cursor()?;
+    restore_terminal(&mut terminal)?;
 
     if let Err(e) = result {
         eprintln!("Error: {}", e);
@@ -84,28 +71,44 @@ async fn run_app(
     app: &mut App,
 ) -> anyhow::Result<()> {
     loop {
-        // Draw UI
         terminal.draw(|frame| app.render(frame))?;
 
-        // Handle events
         if event::poll(Duration::from_millis(100))? {
             if let Event::Key(key) = event::read()? {
                 if let Some(msg) = app.handle_input(key) {
-                    app.update(msg).await;
+                    app.update(msg);
                 }
             }
         }
 
-        // Check for progress updates
-        while let Ok(line) = app.progress_rx.try_recv() {
-            app.update(app::Message::ProgressUpdate(line)).await;
+        while let Ok(msg) = app.event_rx.try_recv() {
+            app.update(msg);
         }
 
-        // Exit if not running
         if !app.running {
             break;
         }
     }
 
+    Ok(())
+}
+
+fn install_panic_hook() {
+    std::panic::set_hook(Box::new(|panic_info| {
+        let _ = disable_raw_mode();
+        let mut stdout = io::stdout();
+        let _ = execute!(stdout, LeaveAlternateScreen, DisableMouseCapture);
+        eprintln!("{panic_info}");
+    }));
+}
+
+fn restore_terminal(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> anyhow::Result<()> {
+    disable_raw_mode()?;
+    execute!(
+        terminal.backend_mut(),
+        LeaveAlternateScreen,
+        DisableMouseCapture
+    )?;
+    terminal.show_cursor()?;
     Ok(())
 }

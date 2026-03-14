@@ -1,4 +1,6 @@
 use std::process::Stdio;
+
+use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Command;
 use tokio::sync::mpsc;
 
@@ -8,148 +10,134 @@ pub struct CommandResult {
     pub success: bool,
     pub stdout: String,
     pub stderr: String,
-    pub exit_code: Option<i32>,
 }
 
-impl CommandResult {
-    pub fn is_success(&self) -> bool {
-        self.success
-    }
-
-    pub fn output(&self) -> &str {
-        if self.stdout.is_empty() {
-            &self.stderr
-        } else {
-            &self.stdout
-        }
-    }
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StreamSource {
+    Stdout,
+    Stderr,
 }
 
 /// Async command executor for running shell commands
-pub struct CommandExecutor {
-    /// Channel for sending command progress updates
-    progress_tx: Option<mpsc::UnboundedSender<String>>,
-}
+#[derive(Clone)]
+pub struct CommandExecutor;
 
 impl CommandExecutor {
     pub fn new() -> Self {
-        Self { progress_tx: None }
+        Self
     }
 
-    /// Create executor with progress channel
-    pub fn with_progress(tx: mpsc::UnboundedSender<String>) -> Self {
-        Self {
-            progress_tx: Some(tx),
+    async fn read_stream<R>(
+        reader: R,
+        tx: mpsc::UnboundedSender<(StreamSource, String)>,
+        source: StreamSource,
+    ) -> std::io::Result<()>
+    where
+        R: tokio::io::AsyncRead + Unpin,
+    {
+        let mut lines = BufReader::new(reader).lines();
+        while let Some(line) = lines.next_line().await? {
+            let _ = tx.send((source, line));
         }
+
+        Ok(())
     }
 
-    /// Execute a command and return the result
-    pub async fn execute(&self, cmd: &str, args: &[&str]) -> CommandResult {
-        self.send_progress(format!("Running: {} {}", cmd, args.join(" ")));
-
-        let output = Command::new(cmd)
+    /// Execute a command and stream its output as it arrives.
+    pub async fn execute_streaming<F>(
+        &self,
+        cmd: &str,
+        args: &[&str],
+        mut on_output: F,
+    ) -> CommandResult
+    where
+        F: FnMut(StreamSource, &str),
+    {
+        let mut child = match Command::new(cmd)
             .args(args)
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
-            .output()
-            .await;
+            .spawn()
+        {
+            Ok(child) => child,
+            Err(error) => {
+                return CommandResult {
+                    success: false,
+                    stdout: String::new(),
+                    stderr: error.to_string(),
+                };
+            }
+        };
 
-        match output {
-            Ok(output) => {
-                let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-                let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-                let success = output.status.success();
+        let (tx, mut rx) = mpsc::unbounded_channel();
 
-                if success {
-                    self.send_progress("Command completed successfully".to_string());
-                } else {
-                    self.send_progress(format!("Command failed: {}", stderr));
+        let stdout_task = child.stdout.take().map(|stdout| {
+            let tx = tx.clone();
+            tokio::spawn(Self::read_stream(stdout, tx, StreamSource::Stdout))
+        });
+        let stderr_task = child.stderr.take().map(|stderr| {
+            let tx = tx.clone();
+            tokio::spawn(Self::read_stream(stderr, tx, StreamSource::Stderr))
+        });
+        drop(tx);
+
+        let collect_output = async {
+            let mut stdout = Vec::new();
+            let mut stderr = Vec::new();
+
+            while let Some((source, line)) = rx.recv().await {
+                on_output(source, &line);
+                match source {
+                    StreamSource::Stdout => stdout.push(line),
+                    StreamSource::Stderr => stderr.push(line),
                 }
+            }
 
+            (stdout.join("\n"), stderr.join("\n"))
+        };
+
+        let (status_result, (stdout, stderr)) = tokio::join!(child.wait(), collect_output);
+
+        if let Some(task) = stdout_task {
+            let _ = task.await;
+        }
+        if let Some(task) = stderr_task {
+            let _ = task.await;
+        }
+
+        match status_result {
+            Ok(status) => {
+                let success = status.success();
                 CommandResult {
                     success,
                     stdout,
                     stderr,
-                    exit_code: output.status.code(),
                 }
             }
-            Err(e) => {
-                self.send_progress(format!("Failed to execute command: {}", e));
-                CommandResult {
-                    success: false,
-                    stdout: String::new(),
-                    stderr: e.to_string(),
-                    exit_code: None,
-                }
-            }
+            Err(error) => CommandResult {
+                success: false,
+                stdout,
+                stderr: if stderr.is_empty() {
+                    error.to_string()
+                } else {
+                    format!("{stderr}\n{error}")
+                },
+            },
         }
     }
 
-    /// Execute a shell command (via /bin/sh -c)
-    pub async fn execute_shell(&self, command: &str) -> CommandResult {
-        self.execute("sh", &["-c", command]).await
-    }
-
-    /// Download a file using wget
-    pub async fn download_file(&self, url: &str, output_path: &str) -> CommandResult {
-        self.send_progress(format!("Downloading: {}", url));
-        self.execute("wget", &["-O", output_path, url]).await
-    }
-
-    /// Install a Slackware package
-    pub async fn installpkg(&self, package_path: &str) -> CommandResult {
-        self.send_progress(format!("Installing package: {}", package_path));
-        self.execute("installpkg", &[package_path]).await
-    }
-
-    /// Remove a Slackware package
-    pub async fn removepkg(&self, package_name: &str) -> CommandResult {
-        self.send_progress(format!("Removing package: {}", package_name));
-        self.execute("removepkg", &[package_name]).await
-    }
-
-    /// Run slackpkg command
-    pub async fn slackpkg(&self, args: &[&str]) -> CommandResult {
-        self.send_progress(format!("Running slackpkg {}", args.join(" ")));
-        self.execute("slackpkg", args).await
-    }
-
-    /// Run sbopkg command
-    pub async fn sbopkg(&self, args: &[&str]) -> CommandResult {
-        self.send_progress(format!("Running sbopkg {}", args.join(" ")));
-        self.execute("sbopkg", args).await
-    }
-
-    /// Run sbotools commands
-    pub async fn sboinstall(&self, package: &str) -> CommandResult {
-        self.send_progress(format!("Installing SlackBuild: {}", package));
-        self.execute("sboinstall", &["-j", package]).await
+    /// Execute a command and collect the result without streaming output.
+    pub async fn execute(&self, cmd: &str, args: &[&str]) -> CommandResult {
+        self.execute_streaming(cmd, args, |_, _| {}).await
     }
 
     pub async fn sbofind(&self, query: &str) -> CommandResult {
-        self.send_progress(format!("Searching SlackBuilds: {}", query));
         self.execute("sbofind", &[query]).await
     }
 
-    pub async fn sboconfig(&self, args: &[&str]) -> CommandResult {
-        self.send_progress(format!("Configuring sbotools: {}", args.join(" ")));
-        self.execute("sboconfig", args).await
-    }
-
-    pub async fn sbosnap(&self, args: &[&str]) -> CommandResult {
-        self.send_progress(format!("Running sbosnap {}", args.join(" ")));
-        self.execute("sbosnap", args).await
-    }
-
     /// Create a new user with useradd
-    pub async fn useradd(
-        &self,
-        username: &str,
-        groups: &[&str],
-        shell: &str,
-    ) -> CommandResult {
+    pub async fn useradd(&self, username: &str, groups: &[&str], shell: &str) -> CommandResult {
         let groups_str = groups.join(",");
-        self.send_progress(format!("Creating user: {}", username));
         self.execute(
             "useradd",
             &[
@@ -168,7 +156,6 @@ impl CommandExecutor {
 
     /// Set password for a user using chpasswd
     pub async fn set_password(&self, username: &str, password: &str) -> CommandResult {
-        self.send_progress(format!("Setting password for: {}", username));
         let input = format!("{}:{}", username, password);
 
         let output = Command::new("chpasswd")
@@ -190,13 +177,11 @@ impl CommandExecutor {
                         success: output.status.success(),
                         stdout: String::from_utf8_lossy(&output.stdout).to_string(),
                         stderr: String::from_utf8_lossy(&output.stderr).to_string(),
-                        exit_code: output.status.code(),
                     },
                     Err(e) => CommandResult {
                         success: false,
                         stdout: String::new(),
                         stderr: e.to_string(),
-                        exit_code: None,
                     },
                 }
             }
@@ -204,20 +189,7 @@ impl CommandExecutor {
                 success: false,
                 stdout: String::new(),
                 stderr: e.to_string(),
-                exit_code: None,
             },
-        }
-    }
-
-    /// Run lilo bootloader
-    pub async fn lilo(&self) -> CommandResult {
-        self.send_progress("Running lilo bootloader update".to_string());
-        self.execute("lilo", &[]).await
-    }
-
-    fn send_progress(&self, message: String) {
-        if let Some(tx) = &self.progress_tx {
-            let _ = tx.send(message);
         }
     }
 }

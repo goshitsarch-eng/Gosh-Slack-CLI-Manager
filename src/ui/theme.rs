@@ -31,13 +31,6 @@ impl Theme {
             .add_modifier(Modifier::BOLD)
     }
 
-    pub fn selected() -> Style {
-        Style::default()
-            .fg(Color::Black)
-            .bg(Self::ACCENT)
-            .add_modifier(Modifier::BOLD)
-    }
-
     pub fn tab_active() -> Style {
         Style::default()
             .fg(Self::ACCENT)
@@ -89,9 +82,7 @@ impl Theme {
     }
 
     pub fn input_active() -> Style {
-        Style::default()
-            .fg(Self::FG)
-            .bg(Color::DarkGray)
+        Style::default().fg(Self::FG).bg(Color::DarkGray)
     }
 
     pub fn input_inactive() -> Style {

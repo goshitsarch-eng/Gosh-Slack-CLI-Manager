@@ -5,14 +5,14 @@ use ratatui::{
     widgets::{Block, Borders, Paragraph},
     Frame,
 };
-use tokio::sync::mpsc;
 
-use super::{AsyncComponent, Component};
+use super::Component;
 use crate::app::Message;
 use crate::ui::theme::Theme;
 use crate::ui::widgets::{ProgressList, ProgressStep, StepStatus};
 
-const SBOPKG_URL: &str = "https://github.com/sbopkg/sbopkg/releases/download/0.38.2/sbopkg-0.38.2-noarch-1_wsr.tgz";
+const SBOPKG_URL: &str =
+    "https://github.com/sbopkg/sbopkg/releases/download/0.38.2/sbopkg-0.38.2-noarch-1_wsr.tgz";
 const SBOPKG_FILENAME: &str = "sbopkg-0.38.2-noarch-1_wsr.tgz";
 const SBO_REPO_URL: &str = "https://gitlab.com/SlackBuilds.org/slackbuilds.git";
 
@@ -22,7 +22,6 @@ pub struct SbotoolsComponent {
     current_step: usize,
     output_lines: Vec<String>,
     is_running: bool,
-    progress_tx: Option<mpsc::UnboundedSender<String>>,
 }
 
 impl SbotoolsComponent {
@@ -39,7 +38,6 @@ impl SbotoolsComponent {
             current_step: 0,
             output_lines: Vec::new(),
             is_running: false,
-            progress_tx: None,
         }
     }
 
@@ -124,6 +122,7 @@ impl Default for SbotoolsComponent {
 }
 
 /// Commands that the sbotools installer needs to run
+#[derive(Debug, Clone)]
 pub enum SbotoolsCommand {
     Download { url: String, filename: String },
     InstallPkg { path: String },
@@ -159,9 +158,10 @@ impl Component for SbotoolsComponent {
             .split(area);
 
         // Title
-        let title = Paragraph::new(Line::from(vec![
-            ratatui::text::Span::styled("sbotools Installer", Theme::title()),
-        ]))
+        let title = Paragraph::new(Line::from(vec![ratatui::text::Span::styled(
+            "sbotools Installer",
+            Theme::title(),
+        )]))
         .block(Block::default().borders(Borders::BOTTOM));
         frame.render_widget(title, chunks[0]);
 
@@ -181,8 +181,11 @@ impl Component for SbotoolsComponent {
         frame.render_widget(desc, progress_chunks[0]);
 
         // Progress steps
-        let progress = ProgressList::new(&self.steps)
-            .block(Block::default().borders(Borders::ALL).title("Installation Steps"));
+        let progress = ProgressList::new(&self.steps).block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title("Installation Steps"),
+        );
         frame.render_widget(progress, progress_chunks[1]);
 
         // Output
@@ -206,15 +209,5 @@ impl Component for SbotoolsComponent {
         } else {
             vec![("Enter", "Start Installation"), ("R", "Reset")]
         }
-    }
-}
-
-impl AsyncComponent for SbotoolsComponent {
-    fn set_progress_channel(&mut self, tx: mpsc::UnboundedSender<String>) {
-        self.progress_tx = Some(tx);
-    }
-
-    fn is_running(&self) -> bool {
-        self.is_running
     }
 }

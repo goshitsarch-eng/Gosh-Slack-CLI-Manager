@@ -6,8 +6,8 @@ use ratatui::{
     widgets::{Block, Borders, Gauge, List, ListItem, Paragraph},
     Frame,
 };
-use sysinfo::{CpuRefreshKind, Disks, MemoryRefreshKind, Networks, RefreshKind, System};
 use std::time::Instant;
+use sysinfo::{CpuRefreshKind, Disks, MemoryRefreshKind, Networks, RefreshKind, System};
 
 use crate::app::Message;
 use crate::components::Component;
@@ -93,7 +93,7 @@ impl SysInfoComponent {
                 Span::raw(format!(
                     "{} {}",
                     System::name().unwrap_or_else(|| "Unknown".to_string()),
-                    System::os_version().unwrap_or_else(|| "".to_string())
+                    System::os_version().unwrap_or_default()
                 )),
             ]),
             Line::from(vec![
@@ -171,11 +171,7 @@ impl SysInfoComponent {
                 let usage = cpu.cpu_usage();
                 let bar_width = 20;
                 let filled = (usage / 100.0 * bar_width as f32) as usize;
-                let bar = format!(
-                    "[{}{}]",
-                    "█".repeat(filled),
-                    "░".repeat(bar_width - filled)
-                );
+                let bar = format!("[{}{}]", "█".repeat(filled), "░".repeat(bar_width - filled));
                 ListItem::new(Line::from(vec![
                     Span::styled(format!("CPU{:2}: ", i), Style::default().fg(Color::Cyan)),
                     Span::styled(bar, Style::default().fg(Self::usage_color(usage as u16))),
@@ -278,25 +274,17 @@ impl SysInfoComponent {
             .iter()
             .map(|(name, data)| {
                 ListItem::new(vec![
-                    Line::from(vec![
-                        Span::styled(
-                            format!("{}: ", name),
-                            Style::default()
-                                .fg(Color::Cyan)
-                                .add_modifier(Modifier::BOLD),
-                        ),
-                    ]),
+                    Line::from(vec![Span::styled(
+                        format!("{}: ", name),
+                        Style::default()
+                            .fg(Color::Cyan)
+                            .add_modifier(Modifier::BOLD),
+                    )]),
                     Line::from(vec![
                         Span::styled("  ↓ ", Style::default().fg(Color::Green)),
-                        Span::raw(format!(
-                            "{}/s  ",
-                            Self::format_bytes(data.received())
-                        )),
+                        Span::raw(format!("{}/s  ", Self::format_bytes(data.received()))),
                         Span::styled("↑ ", Style::default().fg(Color::Red)),
-                        Span::raw(format!(
-                            "{}/s",
-                            Self::format_bytes(data.transmitted())
-                        )),
+                        Span::raw(format!("{}/s", Self::format_bytes(data.transmitted()))),
                     ]),
                 ])
             })
@@ -347,7 +335,13 @@ impl SysInfoComponent {
                         format!("{:>8} ", Self::format_bytes(p.memory())),
                         Style::default().fg(Color::Yellow),
                     ),
-                    Span::raw(p.name().to_string_lossy().chars().take(30).collect::<String>()),
+                    Span::raw(
+                        p.name()
+                            .to_string_lossy()
+                            .chars()
+                            .take(30)
+                            .collect::<String>(),
+                    ),
                 ]))
             })
             .collect();
@@ -418,11 +412,7 @@ impl Component for SysInfoComponent {
     }
 
     fn help_text(&self) -> Vec<(&'static str, &'static str)> {
-        vec![
-            ("Tab", "Next Section"),
-            ("↑/↓", "Scroll"),
-            ("r", "Refresh"),
-        ]
+        vec![("Tab", "Next Section"), ("↑/↓", "Scroll"), ("r", "Refresh")]
     }
 
     fn on_activate(&mut self) {

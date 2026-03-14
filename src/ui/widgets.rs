@@ -2,8 +2,7 @@ use ratatui::{
     layout::Rect,
     style::Modifier,
     text::{Line, Span},
-    widgets::{Block, Borders, Paragraph, Widget},
-    Frame,
+    widgets::{Block, Widget},
 };
 
 use super::theme::Theme;
@@ -29,21 +28,6 @@ impl ProgressStep {
             name: name.into(),
             status: StepStatus::Pending,
         }
-    }
-
-    pub fn running(mut self) -> Self {
-        self.status = StepStatus::Running;
-        self
-    }
-
-    pub fn complete(mut self) -> Self {
-        self.status = StepStatus::Complete;
-        self
-    }
-
-    pub fn failed(mut self, error: impl Into<String>) -> Self {
-        self.status = StepStatus::Failed(error.into());
-        self
     }
 }
 
@@ -145,83 +129,4 @@ impl Widget for StatusBar<'_> {
         let line = Line::from(spans);
         buf.set_line(area.x, area.y, &line, area.width);
     }
-}
-
-/// Render a confirmation dialog
-pub fn render_confirm_dialog(
-    frame: &mut Frame,
-    area: Rect,
-    title: &str,
-    message: &str,
-    confirm_selected: bool,
-) {
-    let block = Block::default()
-        .title(title)
-        .borders(Borders::ALL)
-        .border_style(Theme::border_focused());
-
-    let inner = block.inner(area);
-    frame.render_widget(block, area);
-
-    // Message
-    let msg = Paragraph::new(message).style(Theme::default());
-    let msg_area = Rect {
-        x: inner.x + 1,
-        y: inner.y + 1,
-        width: inner.width.saturating_sub(2),
-        height: inner.height.saturating_sub(3),
-    };
-    frame.render_widget(msg, msg_area);
-
-    // Buttons
-    let button_y = inner.y + inner.height - 2;
-    let confirm_style = if confirm_selected {
-        Theme::selected()
-    } else {
-        Theme::default()
-    };
-    let cancel_style = if !confirm_selected {
-        Theme::selected()
-    } else {
-        Theme::default()
-    };
-
-    let buttons = Line::from(vec![
-        Span::raw("  "),
-        Span::styled(" Yes ", confirm_style),
-        Span::raw("  "),
-        Span::styled(" No ", cancel_style),
-    ]);
-
-    frame.render_widget(
-        Paragraph::new(buttons),
-        Rect {
-            x: inner.x + (inner.width / 2).saturating_sub(8),
-            y: button_y,
-            width: 20,
-            height: 1,
-        },
-    );
-}
-
-/// Render an output panel for command output
-pub fn render_output_panel(frame: &mut Frame, area: Rect, title: &str, lines: &[String]) {
-    let block = Block::default()
-        .title(title)
-        .borders(Borders::ALL)
-        .border_style(Theme::border());
-
-    let inner = block.inner(area);
-    frame.render_widget(block, area);
-
-    // Show last N lines that fit
-    let visible_lines = inner.height as usize;
-    let start = lines.len().saturating_sub(visible_lines);
-    let display_lines: Vec<Line> = lines[start..]
-        .iter()
-        .map(|s| Line::from(s.as_str()))
-        .collect();
-
-    let paragraph = Paragraph::new(display_lines).style(Theme::muted());
-    frame.render_widget(paragraph, inner);
 }

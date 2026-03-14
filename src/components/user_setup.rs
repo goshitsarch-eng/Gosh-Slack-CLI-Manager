@@ -6,9 +6,8 @@ use ratatui::{
     widgets::{Block, Borders, Paragraph},
     Frame,
 };
-use tokio::sync::mpsc;
 
-use super::{AsyncComponent, Component};
+use super::Component;
 use crate::app::Message;
 use crate::ui::theme::Theme;
 
@@ -37,7 +36,6 @@ pub struct UserSetupComponent {
     is_running: bool,
     error_message: Option<String>,
     success_message: Option<String>,
-    progress_tx: Option<mpsc::UnboundedSender<String>>,
 }
 
 impl UserSetupComponent {
@@ -57,7 +55,6 @@ impl UserSetupComponent {
             is_running: false,
             error_message: None,
             success_message: None,
-            progress_tx: None,
         }
     }
 
@@ -199,18 +196,16 @@ impl Component for UserSetupComponent {
                 }
                 None
             }
-            KeyCode::Enter => {
-                match self.validate() {
-                    Ok(()) => {
-                        self.start_create();
-                        Some(Message::CreateUser)
-                    }
-                    Err(e) => {
-                        self.error_message = Some(e);
-                        None
-                    }
+            KeyCode::Enter => match self.validate() {
+                Ok(()) => {
+                    self.start_create();
+                    Some(Message::CreateUser)
                 }
-            }
+                Err(e) => {
+                    self.error_message = Some(e);
+                    None
+                }
+            },
             KeyCode::Char('r') if key.modifiers.contains(KeyModifiers::CONTROL) => {
                 self.reset();
                 None
@@ -230,11 +225,8 @@ impl Component for UserSetupComponent {
             .split(area);
 
         // Title
-        let title = Paragraph::new(Line::from(vec![Span::styled(
-            "User Setup",
-            Theme::title(),
-        )]))
-        .block(Block::default().borders(Borders::BOTTOM));
+        let title = Paragraph::new(Line::from(vec![Span::styled("User Setup", Theme::title())]))
+            .block(Block::default().borders(Borders::BOTTOM));
         frame.render_widget(title, chunks[0]);
 
         // Form
@@ -391,15 +383,5 @@ impl Component for UserSetupComponent {
             ("Enter", "Create"),
             ("Ctrl+R", "Reset"),
         ]
-    }
-}
-
-impl AsyncComponent for UserSetupComponent {
-    fn set_progress_channel(&mut self, tx: mpsc::UnboundedSender<String>) {
-        self.progress_tx = Some(tx);
-    }
-
-    fn is_running(&self) -> bool {
-        self.is_running
     }
 }

@@ -90,7 +90,13 @@ impl ServiceComponent {
                 // Only include rc.* scripts (init scripts)
                 if name.starts_with("rc.") && !name.ends_with("~") && !name.ends_with(".new") {
                     // Skip rc.M, rc.K, rc.S, etc. (runlevel scripts)
-                    if name.len() == 4 && name.chars().nth(3).map(|c| c.is_uppercase()).unwrap_or(false) {
+                    if name.len() == 4
+                        && name
+                            .chars()
+                            .nth(3)
+                            .map(|c| c.is_uppercase())
+                            .unwrap_or(false)
+                    {
                         continue;
                     }
                     // Skip rc.local_shutdown and similar
@@ -124,9 +130,7 @@ impl ServiceComponent {
 
     fn check_if_running(service_name: &str) -> bool {
         // Try to determine if service is running based on common patterns
-        let daemon_name = service_name
-            .trim_start_matches("rc.")
-            .replace("_", "");
+        let daemon_name = service_name.trim_start_matches("rc.").replace("_", "");
 
         // Check for PID file
         let pid_files = [
@@ -191,67 +195,23 @@ impl ServiceComponent {
 
     fn selected_service(&self) -> Option<&ServiceInfo> {
         let filtered = self.filtered_services();
-        self.list_state.selected().and_then(|i| filtered.get(i).copied())
+        self.list_state
+            .selected()
+            .and_then(|i| filtered.get(i).copied())
     }
 
-    fn execute_action(&mut self, action: ServiceAction) -> Option<Message> {
-        let (script_path, action_str) = match &action {
-            ServiceAction::Start(name) => {
-                (format!("/etc/rc.d/{}", name), "start")
-            }
-            ServiceAction::Stop(name) => {
-                (format!("/etc/rc.d/{}", name), "stop")
-            }
-            ServiceAction::Restart(name) => {
-                (format!("/etc/rc.d/{}", name), "restart")
-            }
-            ServiceAction::Toggle(name) => {
-                // Toggle executable bit
-                let path = format!("/etc/rc.d/{}", name);
-                if let Ok(metadata) = fs::metadata(&path) {
-                    let mut perms = metadata.permissions();
-                    let mode = perms.mode();
-                    if mode & 0o111 != 0 {
-                        perms.set_mode(mode & !0o111);
-                    } else {
-                        perms.set_mode(mode | 0o755);
-                    }
-                    if let Err(e) = fs::set_permissions(&path, perms) {
-                        self.status_message = Some((format!("Failed to toggle: {}", e), true));
-                    } else {
-                        self.status_message = Some((format!("Toggled {} executable bit", name), false));
-                        self.load_services();
-                    }
-                }
-                return None;
-            }
+    pub fn action_started(&mut self, action: &ServiceAction) {
+        let message = match action {
+            ServiceAction::Start(name) => format!("Starting {name}..."),
+            ServiceAction::Stop(name) => format!("Stopping {name}..."),
+            ServiceAction::Restart(name) => format!("Restarting {name}..."),
+            ServiceAction::Toggle(name) => format!("Toggling {name}..."),
         };
+        self.status_message = Some((message, false));
+    }
 
-        match std::process::Command::new(&script_path)
-            .arg(action_str)
-            .output()
-        {
-            Ok(output) => {
-                if output.status.success() {
-                    self.status_message = Some((
-                        format!("Service {} {}ed successfully", script_path, action_str),
-                        false,
-                    ));
-                } else {
-                    let stderr = String::from_utf8_lossy(&output.stderr);
-                    self.status_message = Some((
-                        format!("Failed to {} service: {}", action_str, stderr),
-                        true,
-                    ));
-                }
-            }
-            Err(e) => {
-                self.status_message = Some((format!("Failed to execute: {}", e), true));
-            }
-        }
-
-        self.load_services();
-        None
+    pub fn set_status(&mut self, message: String, is_error: bool) {
+        self.status_message = Some((message, is_error));
     }
 }
 
@@ -262,7 +222,7 @@ impl Component for ServiceComponent {
                 KeyCode::Char('y') | KeyCode::Char('Y') => {
                     self.show_confirm = false;
                     if let Some(action) = self.pending_action.take() {
-                        return self.execute_action(action);
+                        return Some(Message::ServiceAction(action));
                     }
                 }
                 KeyCode::Char('n') | KeyCode::Char('N') | KeyCode::Esc => {
@@ -323,7 +283,9 @@ impl Component for ServiceComponent {
             }
             KeyCode::Char('e') => {
                 if let Some(service) = self.selected_service() {
-                    return self.execute_action(ServiceAction::Toggle(service.name.clone()));
+                    return Some(Message::ServiceAction(ServiceAction::Toggle(
+                        service.name.clone(),
+                    )));
                 }
             }
             KeyCode::Tab => {
@@ -429,8 +391,7 @@ impl Component for ServiceComponent {
             Line::from(Span::raw("Select a service"))
         };
 
-        let status = Paragraph::new(status_content)
-            .block(Block::default().borders(Borders::ALL));
+        let status = Paragraph::new(status_content).block(Block::default().borders(Borders::ALL));
         frame.render_widget(status, chunks[2]);
     }
 

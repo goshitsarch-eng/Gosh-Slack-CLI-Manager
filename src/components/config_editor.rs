@@ -6,10 +6,9 @@ use ratatui::{
     widgets::{Block, Borders, List, ListItem, ListState, Paragraph},
     Frame,
 };
-use tokio::sync::mpsc;
 use tui_textarea::TextArea;
 
-use super::{AsyncComponent, Component};
+use super::Component;
 use crate::app::Message;
 use crate::ui::theme::Theme;
 
@@ -33,9 +32,7 @@ pub struct ConfigEditorComponent {
     current_file: Option<String>,
     textarea: TextArea<'static>,
     is_modified: bool,
-    is_saving: bool,
     status_message: Option<(String, bool)>,
-    progress_tx: Option<mpsc::UnboundedSender<String>>,
 }
 
 impl ConfigEditorComponent {
@@ -54,9 +51,7 @@ impl ConfigEditorComponent {
             current_file: None,
             textarea,
             is_modified: false,
-            is_saving: false,
             status_message: None,
-            progress_tx: None,
         }
     }
 
@@ -77,19 +72,6 @@ impl ConfigEditorComponent {
         self.mode = EditorMode::Editing;
         self.is_modified = false;
         self.status_message = None;
-
-        Ok(())
-    }
-
-    pub fn save_file(&mut self) -> Result<(), String> {
-        use std::fs;
-
-        if let Some(ref path) = self.current_file {
-            let content = self.textarea.lines().join("\n");
-            fs::write(path, content + "\n").map_err(|e| e.to_string())?;
-            self.is_modified = false;
-            self.status_message = Some(("File saved successfully".to_string(), false));
-        }
 
         Ok(())
     }
@@ -116,7 +98,16 @@ impl ConfigEditorComponent {
 
     pub fn set_status(&mut self, message: String, is_error: bool) {
         self.status_message = Some((message, is_error));
-        self.is_saving = false;
+        if !is_error {
+            self.is_modified = false;
+        }
+    }
+
+    pub fn save_request(&self) -> Option<(String, String)> {
+        self.current_file.as_ref().map(|path| {
+            let content = format!("{}\n", self.textarea.lines().join("\n"));
+            (path.clone(), content)
+        })
     }
 }
 
@@ -162,15 +153,18 @@ impl Component for ConfigEditorComponent {
                 if key.modifiers.contains(KeyModifiers::CONTROL) {
                     match key.code {
                         KeyCode::Char('s') => {
-                            if let Err(e) = self.save_file() {
-                                self.status_message = Some((format!("Save error: {}", e), true));
+                            if let Some((path, content)) = self.save_request() {
+                                return Some(Message::SaveConfig { path, content });
                             }
                             return None;
                         }
                         KeyCode::Char('q') => {
                             if self.is_modified {
-                                self.status_message =
-                                    Some(("Unsaved changes! Ctrl+S to save, Ctrl+X to discard".to_string(), true));
+                                self.status_message = Some((
+                                    "Unsaved changes! Ctrl+S to save, Ctrl+X to discard"
+                                        .to_string(),
+                                    true,
+                                ));
                             } else {
                                 self.close_editor();
                             }
@@ -266,7 +260,7 @@ impl Component for ConfigEditorComponent {
         };
         frame.render_widget(
             status_text.block(Block::default().borders(Borders::TOP)),
-            chunks[3],
+            chunks[2],
         );
     }
 
@@ -279,15 +273,5 @@ impl Component for ConfigEditorComponent {
                 ("Ctrl+X", "Discard"),
             ],
         }
-    }
-}
-
-impl AsyncComponent for ConfigEditorComponent {
-    fn set_progress_channel(&mut self, tx: mpsc::UnboundedSender<String>) {
-        self.progress_tx = Some(tx);
-    }
-
-    fn is_running(&self) -> bool {
-        self.is_saving
     }
 }

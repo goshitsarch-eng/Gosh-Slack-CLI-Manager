@@ -1,3 +1,4 @@
+use chrono::{DateTime, Local};
 use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
@@ -7,14 +8,16 @@ use ratatui::{
     Frame,
 };
 use std::fs;
+use std::fs::Permissions;
+use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
-use chrono::{DateTime, Local};
 
 use crate::app::Message;
 use crate::components::Component;
 use crate::ui::theme::Theme;
 
 const BACKUP_DIR: &str = "/var/backups/slackware-cli-manager";
+const SENSITIVE_FILES: &[&str] = &["/etc/shadow"];
 
 /// Predefined config files to backup
 const CONFIG_FILES: &[(&str, &str)] = &[
@@ -63,16 +66,22 @@ pub enum BackupMode {
 
 #[derive(Debug, Clone)]
 pub enum BackupAction {
-    CreateBackup,
-    RestoreBackup(PathBuf),
-    DeleteBackup(PathBuf),
+    Create,
+    Restore(PathBuf),
+    Delete(PathBuf),
 }
 
 impl BackupComponent {
     pub fn new() -> Self {
         let config_files = CONFIG_FILES
             .iter()
-            .map(|(path, desc)| (path.to_string(), desc.to_string(), true))
+            .map(|(path, desc)| {
+                (
+                    path.to_string(),
+                    desc.to_string(),
+                    !SENSITIVE_FILES.contains(path),
+                )
+            })
             .collect();
 
         let mut component = Self {
@@ -88,14 +97,15 @@ impl BackupComponent {
         component
     }
 
-    fn ensure_backup_dir(&self) -> std::io::Result<()> {
-        fs::create_dir_all(BACKUP_DIR)
+    fn ensure_backup_dir() -> std::io::Result<()> {
+        fs::create_dir_all(BACKUP_DIR)?;
+        fs::set_permissions(BACKUP_DIR, Permissions::from_mode(0o700))
     }
 
     fn load_backups(&mut self) {
         self.backups.clear();
 
-        if let Err(_) = self.ensure_backup_dir() {
+        if Self::ensure_backup_dir().is_err() {
             return;
         }
 
@@ -110,7 +120,9 @@ impl BackupComponent {
                         let timestamp = if name.starts_with("backup_") {
                             let ts_str = name.trim_start_matches("backup_");
                             chrono::NaiveDateTime::parse_from_str(ts_str, "%Y%m%d_%H%M%S")
-                                .map(|dt| DateTime::from_naive_utc_and_offset(dt, *Local::now().offset()))
+                                .map(|dt| {
+                                    DateTime::from_naive_utc_and_offset(dt, *Local::now().offset())
+                                })
                                 .unwrap_or_else(|_| Local::now())
                         } else {
                             Local::now()
@@ -150,24 +162,31 @@ impl BackupComponent {
         (count, size)
     }
 
-    fn create_backup(&mut self) -> Option<Message> {
-        if let Err(e) = self.ensure_backup_dir() {
-            self.status_message = Some((format!("Failed to create backup directory: {}", e), true));
-            return None;
+    pub fn execute(
+        action: BackupAction,
+        config_files: &[(String, String, bool)],
+    ) -> Result<String, String> {
+        match action {
+            BackupAction::Create => Self::create_backup(config_files),
+            BackupAction::Restore(path) => Self::restore_backup(&path),
+            BackupAction::Delete(path) => Self::delete_backup(&path),
         }
+    }
+
+    fn create_backup(config_files: &[(String, String, bool)]) -> Result<String, String> {
+        Self::ensure_backup_dir().map_err(|err| err.to_string())?;
 
         let timestamp = Local::now().format("%Y%m%d_%H%M%S");
         let backup_path = PathBuf::from(BACKUP_DIR).join(format!("backup_{}", timestamp));
 
-        if let Err(e) = fs::create_dir_all(&backup_path) {
-            self.status_message = Some((format!("Failed to create backup: {}", e), true));
-            return None;
-        }
+        fs::create_dir_all(&backup_path).map_err(|err| err.to_string())?;
+        fs::set_permissions(&backup_path, Permissions::from_mode(0o700))
+            .map_err(|err| err.to_string())?;
 
         let mut backed_up = 0;
         let mut failed = 0;
 
-        for (path, _, selected) in &self.config_files {
+        for (path, _, selected) in config_files {
             if !*selected {
                 continue;
             }
@@ -182,27 +201,26 @@ impl BackupComponent {
             let dest = backup_path.join(&dest_name);
 
             match fs::copy(source, &dest) {
-                Ok(_) => backed_up += 1,
+                Ok(_) => {
+                    backed_up += 1;
+                    let _ = fs::set_permissions(&dest, Permissions::from_mode(0o600));
+                }
                 Err(_) => failed += 1,
             }
         }
 
         if backed_up > 0 {
-            self.status_message = Some((
-                format!("Backup created: {} files backed up, {} failed", backed_up, failed),
-                failed > 0,
-            ));
-            self.load_backups();
+            Ok(format!(
+                "Backup created: {} files backed up, {} failed",
+                backed_up, failed
+            ))
         } else {
-            self.status_message = Some(("No files were backed up".to_string(), true));
-            // Remove empty backup directory
             let _ = fs::remove_dir(&backup_path);
+            Err("No files were backed up".to_string())
         }
-
-        None
     }
 
-    fn restore_backup(&mut self, backup_path: &Path) -> Option<Message> {
+    fn restore_backup(backup_path: &Path) -> Result<String, String> {
         let mut restored = 0;
         let mut failed = 0;
 
@@ -223,25 +241,20 @@ impl BackupComponent {
             }
         }
 
-        self.status_message = Some((
-            format!("Restore complete: {} files restored, {} failed", restored, failed),
-            failed > 0,
-        ));
+        if restored == 0 && failed == 0 {
+            return Err("Backup did not contain any restorable files".to_string());
+        }
 
-        None
+        Ok(format!(
+            "Restore complete: {} files restored, {} failed",
+            restored, failed
+        ))
     }
 
-    fn delete_backup(&mut self, backup_path: &Path) -> Option<Message> {
-        match fs::remove_dir_all(backup_path) {
-            Ok(_) => {
-                self.status_message = Some(("Backup deleted successfully".to_string(), false));
-                self.load_backups();
-            }
-            Err(e) => {
-                self.status_message = Some((format!("Failed to delete backup: {}", e), true));
-            }
-        }
-        None
+    fn delete_backup(backup_path: &Path) -> Result<String, String> {
+        fs::remove_dir_all(backup_path)
+            .map(|_| "Backup deleted successfully".to_string())
+            .map_err(|err| err.to_string())
     }
 
     fn format_size(bytes: u64) -> String {
@@ -256,6 +269,22 @@ impl BackupComponent {
             format!("{} B", bytes)
         }
     }
+
+    pub fn set_status(&mut self, message: String, is_error: bool) {
+        self.status_message = Some((message, is_error));
+    }
+
+    pub fn refresh_backups(&mut self) {
+        self.load_backups();
+    }
+
+    pub fn config_files(&self) -> &[(String, String, bool)] {
+        &self.config_files
+    }
+
+    fn is_sensitive(path: &str) -> bool {
+        SENSITIVE_FILES.contains(&path)
+    }
 }
 
 impl Component for BackupComponent {
@@ -265,11 +294,7 @@ impl Component for BackupComponent {
                 KeyCode::Char('y') | KeyCode::Char('Y') => {
                     self.show_confirm = false;
                     if let Some(action) = self.pending_action.take() {
-                        return match action {
-                            BackupAction::CreateBackup => self.create_backup(),
-                            BackupAction::RestoreBackup(path) => self.restore_backup(&path),
-                            BackupAction::DeleteBackup(path) => self.delete_backup(&path),
-                        };
+                        return Some(Message::BackupAction(action));
                     }
                 }
                 KeyCode::Char('n') | KeyCode::Char('N') | KeyCode::Esc => {
@@ -328,27 +353,24 @@ impl Component for BackupComponent {
                     file.2 = !all_selected;
                 }
             }
-            KeyCode::Enter => {
-                match self.mode {
-                    BackupMode::Create => {
-                        self.pending_action = Some(BackupAction::CreateBackup);
-                        self.show_confirm = true;
-                    }
-                    BackupMode::Restore => {
-                        if let Some(selected) = self.list_state.selected() {
-                            if let Some(backup) = self.backups.get(selected) {
-                                self.pending_action =
-                                    Some(BackupAction::RestoreBackup(backup.path.clone()));
-                                self.show_confirm = true;
-                            }
+            KeyCode::Enter => match self.mode {
+                BackupMode::Create => {
+                    self.pending_action = Some(BackupAction::Create);
+                    self.show_confirm = true;
+                }
+                BackupMode::Restore => {
+                    if let Some(selected) = self.list_state.selected() {
+                        if let Some(backup) = self.backups.get(selected) {
+                            self.pending_action = Some(BackupAction::Restore(backup.path.clone()));
+                            self.show_confirm = true;
                         }
                     }
                 }
-            }
+            },
             KeyCode::Char('d') if self.mode == BackupMode::Restore => {
                 if let Some(selected) = self.list_state.selected() {
                     if let Some(backup) = self.backups.get(selected) {
-                        self.pending_action = Some(BackupAction::DeleteBackup(backup.path.clone()));
+                        self.pending_action = Some(BackupAction::Delete(backup.path.clone()));
                         self.show_confirm = true;
                     }
                 }
@@ -397,9 +419,9 @@ impl Component for BackupComponent {
         // Status bar
         let status_content = if self.show_confirm {
             let action_desc = match &self.pending_action {
-                Some(BackupAction::CreateBackup) => "Create backup?".to_string(),
-                Some(BackupAction::RestoreBackup(_)) => "Restore this backup?".to_string(),
-                Some(BackupAction::DeleteBackup(_)) => "Delete this backup?".to_string(),
+                Some(BackupAction::Create) => "Create backup?".to_string(),
+                Some(BackupAction::Restore(_)) => "Restore this backup?".to_string(),
+                Some(BackupAction::Delete(_)) => "Delete this backup?".to_string(),
                 None => "Confirm action?".to_string(),
             };
             Line::from(vec![
@@ -413,13 +435,15 @@ impl Component for BackupComponent {
             ))
         } else {
             Line::from(Span::styled(
-                format!("Backup directory: {}", BACKUP_DIR),
+                format!(
+                    "Backup directory: {} | sensitive files are opt-in",
+                    BACKUP_DIR
+                ),
                 Style::default().fg(Color::DarkGray),
             ))
         };
 
-        let status = Paragraph::new(status_content)
-            .block(Block::default().borders(Borders::ALL));
+        let status = Paragraph::new(status_content).block(Block::default().borders(Borders::ALL));
         frame.render_widget(status, chunks[2]);
     }
 
@@ -453,6 +477,11 @@ impl BackupComponent {
                 let checkbox = if *selected { "[✓]" } else { "[ ]" };
                 let exists = Path::new(path).exists();
                 let status = if exists { "" } else { " (not found)" };
+                let sensitivity = if Self::is_sensitive(path) {
+                    " [sensitive]"
+                } else {
+                    ""
+                };
 
                 ListItem::new(vec![
                     Line::from(vec![
@@ -473,6 +502,7 @@ impl BackupComponent {
                                 Modifier::DIM
                             }),
                         ),
+                        Span::styled(sensitivity, Style::default().fg(Color::Yellow)),
                         Span::styled(status, Style::default().fg(Color::Red)),
                     ]),
                     Line::from(Span::styled(
@@ -523,6 +553,8 @@ impl BackupComponent {
                                 .fg(Color::Cyan)
                                 .add_modifier(Modifier::BOLD),
                         ),
+                        Span::styled("  ", Style::default()),
+                        Span::styled(&backup.name, Style::default().fg(Color::DarkGray)),
                     ]),
                     Line::from(vec![
                         Span::styled("    Files: ", Style::default().fg(Color::DarkGray)),

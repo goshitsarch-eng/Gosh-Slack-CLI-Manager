@@ -52,16 +52,6 @@ impl SlackwareVersion {
             SlackwareVersion::Unknown(v) => format!("Slackware ({})", v),
         }
     }
-
-    /// Get all supported versions
-    pub fn all_versions() -> Vec<SlackwareVersion> {
-        vec![
-            SlackwareVersion::Current,
-            SlackwareVersion::V15_0,
-            SlackwareVersion::V14_2,
-            SlackwareVersion::V14_1,
-        ]
-    }
 }
 
 impl std::fmt::Display for SlackwareVersion {

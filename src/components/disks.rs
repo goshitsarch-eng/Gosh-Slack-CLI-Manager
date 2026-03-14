@@ -86,9 +86,7 @@ impl DiskComponent {
                         continue;
                     }
 
-                    let name = source
-                        .trim_start_matches("/dev/")
-                        .to_string();
+                    let name = source.trim_start_matches("/dev/").to_string();
 
                     let mount_point = parts[1].to_string();
                     let filesystem = parts[2].to_string();
@@ -96,10 +94,7 @@ impl DiskComponent {
                     let size: u64 = parts[3].parse().unwrap_or(0);
                     let used: u64 = parts[4].parse().unwrap_or(0);
                     let available: u64 = parts[5].parse().unwrap_or(0);
-                    let use_percent: u8 = parts[6]
-                        .trim_end_matches('%')
-                        .parse()
-                        .unwrap_or(0);
+                    let use_percent: u8 = parts[6].trim_end_matches('%').parse().unwrap_or(0);
 
                     self.disks.push(DiskInfo {
                         name: name.clone(),
@@ -173,58 +168,24 @@ impl DiskComponent {
         self.list_state.selected().and_then(|i| self.disks.get(i))
     }
 
-    fn mount_disk(&mut self, device: &str) -> Option<Message> {
-        // Find mount point from fstab or create one
-        let mount_point = self.find_mount_point(device);
-
-        match Command::new("mount").arg(device).arg(&mount_point).output() {
-            Ok(output) => {
-                if output.status.success() {
-                    self.status_message = Some((
-                        format!("Mounted {} at {}", device, mount_point),
-                        false,
-                    ));
-                    self.load_disk_info();
-                } else {
-                    let stderr = String::from_utf8_lossy(&output.stderr);
-                    self.status_message = Some((format!("Mount failed: {}", stderr), true));
-                }
-            }
-            Err(e) => {
-                self.status_message = Some((format!("Error: {}", e), true));
-            }
-        }
-        None
+    pub fn action_started(&mut self, action: &DiskAction) {
+        let message = match action {
+            DiskAction::Mount(device) => format!("Mounting {device}..."),
+            DiskAction::Unmount(mount_point) => format!("Unmounting {mount_point}..."),
+            DiskAction::CheckFilesystem(device) => format!("Checking {device}..."),
+        };
+        self.status_message = Some((message, false));
     }
 
-    fn unmount_disk(&mut self, mount_point: &str) -> Option<Message> {
-        match Command::new("umount").arg(mount_point).output() {
-            Ok(output) => {
-                if output.status.success() {
-                    self.status_message = Some((format!("Unmounted {}", mount_point), false));
-                    self.load_disk_info();
-                } else {
-                    let stderr = String::from_utf8_lossy(&output.stderr);
-                    self.status_message = Some((format!("Unmount failed: {}", stderr), true));
-                }
-            }
-            Err(e) => {
-                self.status_message = Some((format!("Error: {}", e), true));
-            }
-        }
-        None
+    pub fn set_status(&mut self, message: String, is_error: bool) {
+        self.status_message = Some((message, is_error));
     }
 
-    fn check_filesystem(&mut self, device: &str) -> Option<Message> {
-        // Note: filesystem check usually requires unmounted partition
-        self.status_message = Some((
-            "Filesystem check requires unmounted partition. Use 'fsck' manually.".to_string(),
-            true,
-        ));
-        None
+    pub fn refresh_disks(&mut self) {
+        self.load_disk_info();
     }
 
-    fn find_mount_point(&self, device: &str) -> String {
+    pub fn find_mount_point(&self, device: &str) -> String {
         // Check fstab for configured mount point
         if let Ok(content) = fs::read_to_string("/etc/fstab") {
             for line in content.lines() {
@@ -281,11 +242,7 @@ impl Component for DiskComponent {
                 KeyCode::Char('y') | KeyCode::Char('Y') => {
                     self.show_confirm = false;
                     if let Some(action) = self.pending_action.take() {
-                        return match action {
-                            DiskAction::Mount(dev) => self.mount_disk(&dev),
-                            DiskAction::Unmount(mp) => self.unmount_disk(&mp),
-                            DiskAction::CheckFilesystem(dev) => self.check_filesystem(&dev),
-                        };
+                        return Some(Message::DiskAction(action));
                     }
                 }
                 KeyCode::Char('n') | KeyCode::Char('N') | KeyCode::Esc => {
@@ -328,6 +285,13 @@ impl Component for DiskComponent {
                             self.show_confirm = true;
                         }
                     }
+                }
+            }
+            KeyCode::Char('f') => {
+                if let Some(disk) = self.selected_disk() {
+                    self.pending_action =
+                        Some(DiskAction::CheckFilesystem(disk.device_path.clone()));
+                    self.show_confirm = true;
                 }
             }
             KeyCode::Enter => {
@@ -396,8 +360,7 @@ impl Component for DiskComponent {
             Line::from(Span::raw("Select a disk"))
         };
 
-        let status = Paragraph::new(status_content)
-            .block(Block::default().borders(Borders::ALL));
+        let status = Paragraph::new(status_content).block(Block::default().borders(Borders::ALL));
         frame.render_widget(status, chunks[2]);
     }
 
@@ -405,6 +368,7 @@ impl Component for DiskComponent {
         vec![
             ("m", "Mount"),
             ("u", "Unmount"),
+            ("f", "Check FS"),
             ("Enter", "Details"),
             ("F5", "Refresh"),
         ]
@@ -425,8 +389,18 @@ impl DiskComponent {
         frame.render_widget(block, area);
 
         // Calculate totals
-        let total_size: u64 = self.disks.iter().filter(|d| d.is_mounted).map(|d| d.size).sum();
-        let total_used: u64 = self.disks.iter().filter(|d| d.is_mounted).map(|d| d.used).sum();
+        let total_size: u64 = self
+            .disks
+            .iter()
+            .filter(|d| d.is_mounted)
+            .map(|d| d.size)
+            .sum();
+        let total_used: u64 = self
+            .disks
+            .iter()
+            .filter(|d| d.is_mounted)
+            .map(|d| d.used)
+            .sum();
         let mounted_count = self.disks.iter().filter(|d| d.is_mounted).count();
         let unmounted_count = self.disks.iter().filter(|d| !d.is_mounted).count();
 
@@ -473,11 +447,7 @@ impl DiskComponent {
             .disks
             .iter()
             .map(|disk| {
-                let mount_str = disk
-                    .mount_point
-                    .as_ref()
-                    .map(|m| m.as_str())
-                    .unwrap_or("-");
+                let mount_str = disk.mount_point.as_deref().unwrap_or("-");
 
                 let status = if disk.is_mounted {
                     Span::styled("●", Style::default().fg(Color::Green))
@@ -556,12 +526,7 @@ impl DiskComponent {
             ]),
             Line::from(vec![
                 Span::styled("Mount:      ", Style::default().fg(Color::Cyan)),
-                Span::raw(
-                    disk.mount_point
-                        .as_ref()
-                        .map(|s| s.as_str())
-                        .unwrap_or("Not mounted"),
-                ),
+                Span::raw(disk.mount_point.as_deref().unwrap_or("Not mounted")),
             ]),
             Line::from(vec![
                 Span::styled("Size:       ", Style::default().fg(Color::Cyan)),

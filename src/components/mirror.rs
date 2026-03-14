@@ -6,9 +6,8 @@ use ratatui::{
     widgets::{Block, Borders, List, ListItem, ListState, Paragraph},
     Frame,
 };
-use tokio::sync::mpsc;
 
-use super::{AsyncComponent, Component};
+use super::Component;
 use crate::app::Message;
 use crate::slackware::config::MirrorEntry;
 use crate::slackware::SlackwareVersion;
@@ -21,7 +20,6 @@ pub struct MirrorComponent {
     version: SlackwareVersion,
     is_running: bool,
     status_message: Option<(String, bool)>, // (message, is_error)
-    progress_tx: Option<mpsc::UnboundedSender<String>>,
 }
 
 impl MirrorComponent {
@@ -32,13 +30,7 @@ impl MirrorComponent {
             version,
             is_running: false,
             status_message: None,
-            progress_tx: None,
         }
-    }
-
-    pub fn set_version(&mut self, version: SlackwareVersion) {
-        self.version = version;
-        self.load_mirrors();
     }
 
     pub fn load_mirrors(&mut self) {
@@ -192,24 +184,10 @@ impl Component for MirrorComponent {
     }
 
     fn help_text(&self) -> Vec<(&'static str, &'static str)> {
-        vec![
-            ("↑/↓", "Navigate"),
-            ("Enter", "Select"),
-            ("R", "Refresh"),
-        ]
+        vec![("↑/↓", "Navigate"), ("Enter", "Select"), ("R", "Refresh")]
     }
 
     fn on_activate(&mut self) {
         self.load_mirrors();
-    }
-}
-
-impl AsyncComponent for MirrorComponent {
-    fn set_progress_channel(&mut self, tx: mpsc::UnboundedSender<String>) {
-        self.progress_tx = Some(tx);
-    }
-
-    fn is_running(&self) -> bool {
-        self.is_running
     }
 }

@@ -29,25 +29,16 @@ pub struct CronJob {
 
 #[derive(Debug, Clone)]
 pub enum CronSource {
-    System(String),    // Path to file in /etc/cron.*
-    User(String),      // Username
+    System(String), // Path to file in /etc/cron.*
+    User(String),   // Username
 }
 
 /// Cron Job Manager Component
 pub struct CronComponent {
     jobs: Vec<CronJob>,
     list_state: ListState,
-    mode: CronMode,
     filter: CronFilter,
     status_message: Option<(String, bool)>,
-    show_confirm: bool,
-    pending_action: Option<CronAction>,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum CronMode {
-    View,
-    Add,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -61,22 +52,13 @@ pub enum CronFilter {
     Monthly,
 }
 
-#[derive(Debug, Clone)]
-pub enum CronAction {
-    Delete(usize),
-    Toggle(usize),
-}
-
 impl CronComponent {
     pub fn new() -> Self {
         let mut component = Self {
             jobs: Vec::new(),
             list_state: ListState::default(),
-            mode: CronMode::View,
             filter: CronFilter::All,
             status_message: None,
-            show_confirm: false,
-            pending_action: None,
         };
         component.load_cron_jobs();
         if !component.jobs.is_empty() {
@@ -158,7 +140,8 @@ impl CronComponent {
     fn load_crontab(&mut self, path: &str) {
         if let Ok(content) = fs::read_to_string(path) {
             for line in content.lines() {
-                if let Some(job) = self.parse_cron_line(line, CronSource::System(path.to_string())) {
+                if let Some(job) = self.parse_cron_line(line, CronSource::System(path.to_string()))
+                {
                     self.jobs.push(job);
                 }
             }
@@ -187,7 +170,9 @@ impl CronComponent {
                 let username = entry.file_name().to_string_lossy().to_string();
                 if let Ok(content) = fs::read_to_string(entry.path()) {
                     for line in content.lines() {
-                        if let Some(job) = self.parse_cron_line(line, CronSource::User(username.clone())) {
+                        if let Some(job) =
+                            self.parse_cron_line(line, CronSource::User(username.clone()))
+                        {
                             self.jobs.push(job);
                         }
                     }
@@ -214,12 +199,48 @@ impl CronComponent {
         // Handle special time specifications
         if parts[0].starts_with('@') {
             let (minute, hour, day, month, weekday) = match parts[0] {
-                "@reboot" => ("@reboot".to_string(), "-".to_string(), "-".to_string(), "-".to_string(), "-".to_string()),
-                "@yearly" | "@annually" => ("0".to_string(), "0".to_string(), "1".to_string(), "1".to_string(), "*".to_string()),
-                "@monthly" => ("0".to_string(), "0".to_string(), "1".to_string(), "*".to_string(), "*".to_string()),
-                "@weekly" => ("0".to_string(), "0".to_string(), "*".to_string(), "*".to_string(), "0".to_string()),
-                "@daily" | "@midnight" => ("0".to_string(), "0".to_string(), "*".to_string(), "*".to_string(), "*".to_string()),
-                "@hourly" => ("0".to_string(), "*".to_string(), "*".to_string(), "*".to_string(), "*".to_string()),
+                "@reboot" => (
+                    "@reboot".to_string(),
+                    "-".to_string(),
+                    "-".to_string(),
+                    "-".to_string(),
+                    "-".to_string(),
+                ),
+                "@yearly" | "@annually" => (
+                    "0".to_string(),
+                    "0".to_string(),
+                    "1".to_string(),
+                    "1".to_string(),
+                    "*".to_string(),
+                ),
+                "@monthly" => (
+                    "0".to_string(),
+                    "0".to_string(),
+                    "1".to_string(),
+                    "*".to_string(),
+                    "*".to_string(),
+                ),
+                "@weekly" => (
+                    "0".to_string(),
+                    "0".to_string(),
+                    "*".to_string(),
+                    "*".to_string(),
+                    "0".to_string(),
+                ),
+                "@daily" | "@midnight" => (
+                    "0".to_string(),
+                    "0".to_string(),
+                    "*".to_string(),
+                    "*".to_string(),
+                    "*".to_string(),
+                ),
+                "@hourly" => (
+                    "0".to_string(),
+                    "*".to_string(),
+                    "*".to_string(),
+                    "*".to_string(),
+                    "*".to_string(),
+                ),
                 _ => return None,
             };
 
@@ -240,7 +261,8 @@ impl CronComponent {
         // Standard cron format: min hour day month weekday command
         if parts.len() >= 6 {
             // Check if 6th field is a username (system crontab format)
-            let (cmd_start, _) = if matches!(&source, CronSource::System(p) if p == "/etc/crontab" || p.starts_with("/etc/cron.d")) {
+            let (cmd_start, _) = if matches!(&source, CronSource::System(p) if p == "/etc/crontab" || p.starts_with("/etc/cron.d"))
+            {
                 (6, Some(parts[5])) // Skip username field
             } else {
                 (5, None)
@@ -272,17 +294,25 @@ impl CronComponent {
                 CronFilter::All => true,
                 CronFilter::System => matches!(job.source, CronSource::System(_)),
                 CronFilter::User => matches!(job.source, CronSource::User(_)),
-                CronFilter::Hourly => job.raw_line.contains("hourly") || (job.minute == "0" && job.hour == "*"),
-                CronFilter::Daily => job.raw_line.contains("daily") || (job.hour == "0" && job.day == "*"),
+                CronFilter::Hourly => {
+                    job.raw_line.contains("hourly") || (job.minute == "0" && job.hour == "*")
+                }
+                CronFilter::Daily => {
+                    job.raw_line.contains("daily") || (job.hour == "0" && job.day == "*")
+                }
                 CronFilter::Weekly => job.raw_line.contains("weekly") || job.weekday != "*",
-                CronFilter::Monthly => job.raw_line.contains("monthly") || (job.day == "1" && job.month == "*"),
+                CronFilter::Monthly => {
+                    job.raw_line.contains("monthly") || (job.day == "1" && job.month == "*")
+                }
             })
             .collect()
     }
 
     fn selected_job(&self) -> Option<(usize, &CronJob)> {
         let filtered = self.filtered_jobs();
-        self.list_state.selected().and_then(|i| filtered.get(i).copied())
+        self.list_state
+            .selected()
+            .and_then(|i| filtered.get(i).copied())
     }
 
     fn format_schedule(&self, job: &CronJob) -> String {
@@ -322,7 +352,10 @@ impl CronComponent {
         }
 
         if parts.is_empty() {
-            format!("{} {} {} {} {}", job.minute, job.hour, job.day, job.month, job.weekday)
+            format!(
+                "{} {} {} {} {}",
+                job.minute, job.hour, job.day, job.month, job.weekday
+            )
         } else {
             parts.join(" ")
         }
@@ -350,22 +383,6 @@ impl CronComponent {
 
 impl Component for CronComponent {
     fn handle_input(&mut self, key: KeyEvent) -> Option<Message> {
-        if self.show_confirm {
-            match key.code {
-                KeyCode::Char('y') | KeyCode::Char('Y') => {
-                    self.show_confirm = false;
-                    self.pending_action = None;
-                    self.status_message = Some(("Action not implemented for safety".to_string(), true));
-                }
-                KeyCode::Char('n') | KeyCode::Char('N') | KeyCode::Esc => {
-                    self.show_confirm = false;
-                    self.pending_action = None;
-                }
-                _ => {}
-            }
-            return None;
-        }
-
         let filtered_len = self.filtered_jobs().len();
 
         match key.code {
@@ -490,12 +507,7 @@ impl Component for CronComponent {
         frame.render_stateful_widget(list, chunks[1], &mut state);
 
         // Status bar
-        let status_content = if self.show_confirm {
-            Line::from(vec![
-                Span::styled("Confirm action? ", Style::default().fg(Color::Yellow)),
-                Span::raw("[Y]es / [N]o"),
-            ])
-        } else if let Some((msg, is_error)) = &self.status_message {
+        let status_content = if let Some((msg, is_error)) = &self.status_message {
             Line::from(Span::styled(
                 msg.clone(),
                 Style::default().fg(if *is_error { Color::Red } else { Color::Green }),
@@ -513,17 +525,12 @@ impl Component for CronComponent {
             Line::from(Span::raw("No job selected"))
         };
 
-        let status = Paragraph::new(status_content)
-            .block(Block::default().borders(Borders::ALL));
+        let status = Paragraph::new(status_content).block(Block::default().borders(Borders::ALL));
         frame.render_widget(status, chunks[2]);
     }
 
     fn help_text(&self) -> Vec<(&'static str, &'static str)> {
-        vec![
-            ("Tab", "Filter"),
-            ("↑/↓", "Navigate"),
-            ("F5", "Refresh"),
-        ]
+        vec![("Tab", "Filter"), ("↑/↓", "Navigate"), ("F5", "Refresh")]
     }
 
     fn on_activate(&mut self) {

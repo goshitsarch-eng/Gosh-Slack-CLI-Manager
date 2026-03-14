@@ -135,9 +135,9 @@ impl LogViewerComponent {
                         let modified = metadata
                             .modified()
                             .ok()
-                            .and_then(|t| {
+                            .map(|t| {
                                 let datetime: chrono::DateTime<chrono::Local> = t.into();
-                                Some(datetime.format("%Y-%m-%d %H:%M").to_string())
+                                datetime.format("%Y-%m-%d %H:%M").to_string()
                             })
                             .unwrap_or_else(|| "Unknown".to_string());
 
@@ -170,10 +170,7 @@ impl LogViewerComponent {
         match File::open(path) {
             Ok(file) => {
                 let reader = BufReader::new(file);
-                let mut lines: Vec<String> = reader
-                    .lines()
-                    .filter_map(|l| l.ok())
-                    .collect();
+                let mut lines: Vec<String> = reader.lines().map_while(Result::ok).collect();
 
                 // Keep only last MAX_LINES
                 if lines.len() > MAX_LINES {
@@ -364,8 +361,8 @@ impl Component for LogViewerComponent {
                     self.follow_mode = false;
                 }
                 KeyCode::PageDown => {
-                    self.content_scroll = (self.content_scroll + 20)
-                        .min(self.log_content.len().saturating_sub(1));
+                    self.content_scroll =
+                        (self.content_scroll + 20).min(self.log_content.len().saturating_sub(1));
                 }
                 KeyCode::Home | KeyCode::Char('g') => {
                     self.content_scroll = 0;
@@ -412,7 +409,9 @@ impl Component for LogViewerComponent {
 
     fn help_text(&self) -> Vec<(&'static str, &'static str)> {
         match self.mode {
-            LogViewMode::FileList => vec![("Enter", "Open"), ("↑/↓", "Navigate"), ("F5", "Refresh")],
+            LogViewMode::FileList => {
+                vec![("Enter", "Open"), ("↑/↓", "Navigate"), ("F5", "Refresh")]
+            }
             LogViewMode::ViewLog => vec![
                 ("q/Esc", "Back"),
                 ("/", "Search"),
@@ -482,15 +481,18 @@ impl LogViewerComponent {
             Line::from(Span::raw("Select a log file"))
         };
 
-        let status = Paragraph::new(status_content)
-            .block(Block::default().borders(Borders::ALL));
+        let status = Paragraph::new(status_content).block(Block::default().borders(Borders::ALL));
         frame.render_widget(status, chunks[1]);
     }
 
     fn render_log_view(&self, frame: &mut Frame, area: Rect) {
         let chunks = Layout::default()
             .direction(Direction::Vertical)
-            .constraints([Constraint::Length(3), Constraint::Min(10), Constraint::Length(3)])
+            .constraints([
+                Constraint::Length(3),
+                Constraint::Min(10),
+                Constraint::Length(3),
+            ])
             .split(area);
 
         // Header with search
@@ -549,9 +551,7 @@ impl LogViewerComponent {
                 let is_search_match = self.search_results.contains(&line_num);
 
                 let style = if is_search_match {
-                    Style::default()
-                        .bg(Color::Yellow)
-                        .fg(Color::Black)
+                    Style::default().bg(Color::Yellow).fg(Color::Black)
                 } else {
                     Style::default().fg(Self::get_log_level_color(line))
                 };

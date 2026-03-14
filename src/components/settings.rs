@@ -9,12 +9,15 @@ use ratatui::{
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
+use std::{env, path::Path};
 
 use crate::app::Message;
 use crate::components::Component;
 use crate::ui::theme::Theme;
+use crate::utils::fs::atomic_write;
 
 const CONFIG_DIR: &str = "/etc/slackware-cli-manager";
+const USER_CONFIG_DIR: &str = ".config/slackware-cli-manager";
 const CONFIG_FILE: &str = "config.toml";
 
 /// Application settings
@@ -109,33 +112,33 @@ impl ThemeChoice {
                 foreground: Color::Black,
             },
             ThemeChoice::Solarized => ThemeColors {
-                primary: Color::Rgb(38, 139, 210),   // Blue
-                secondary: Color::Rgb(211, 54, 130), // Magenta
-                success: Color::Rgb(133, 153, 0),    // Green
-                error: Color::Rgb(220, 50, 47),      // Red
-                warning: Color::Rgb(181, 137, 0),    // Yellow
-                muted: Color::Rgb(88, 110, 117),     // Base01
-                background: Color::Rgb(0, 43, 54),   // Base03
+                primary: Color::Rgb(38, 139, 210),     // Blue
+                secondary: Color::Rgb(211, 54, 130),   // Magenta
+                success: Color::Rgb(133, 153, 0),      // Green
+                error: Color::Rgb(220, 50, 47),        // Red
+                warning: Color::Rgb(181, 137, 0),      // Yellow
+                muted: Color::Rgb(88, 110, 117),       // Base01
+                background: Color::Rgb(0, 43, 54),     // Base03
                 foreground: Color::Rgb(131, 148, 150), // Base0
             },
             ThemeChoice::Nord => ThemeColors {
-                primary: Color::Rgb(136, 192, 208),  // Nord8
-                secondary: Color::Rgb(180, 142, 173), // Nord15
-                success: Color::Rgb(163, 190, 140),  // Nord14
-                error: Color::Rgb(191, 97, 106),     // Nord11
-                warning: Color::Rgb(235, 203, 139),  // Nord13
-                muted: Color::Rgb(76, 86, 106),      // Nord3
-                background: Color::Rgb(46, 52, 64),  // Nord0
+                primary: Color::Rgb(136, 192, 208),    // Nord8
+                secondary: Color::Rgb(180, 142, 173),  // Nord15
+                success: Color::Rgb(163, 190, 140),    // Nord14
+                error: Color::Rgb(191, 97, 106),       // Nord11
+                warning: Color::Rgb(235, 203, 139),    // Nord13
+                muted: Color::Rgb(76, 86, 106),        // Nord3
+                background: Color::Rgb(46, 52, 64),    // Nord0
                 foreground: Color::Rgb(236, 239, 244), // Nord6
             },
             ThemeChoice::Dracula => ThemeColors {
-                primary: Color::Rgb(139, 233, 253),  // Cyan
-                secondary: Color::Rgb(255, 121, 198), // Pink
-                success: Color::Rgb(80, 250, 123),   // Green
-                error: Color::Rgb(255, 85, 85),      // Red
-                warning: Color::Rgb(241, 250, 140),  // Yellow
-                muted: Color::Rgb(98, 114, 164),     // Comment
-                background: Color::Rgb(40, 42, 54),  // Background
+                primary: Color::Rgb(139, 233, 253),    // Cyan
+                secondary: Color::Rgb(255, 121, 198),  // Pink
+                success: Color::Rgb(80, 250, 123),     // Green
+                error: Color::Rgb(255, 85, 85),        // Red
+                warning: Color::Rgb(241, 250, 140),    // Yellow
+                muted: Color::Rgb(98, 114, 164),       // Comment
+                background: Color::Rgb(40, 42, 54),    // Background
                 foreground: Color::Rgb(248, 248, 242), // Foreground
             },
         }
@@ -167,7 +170,6 @@ pub struct SettingsComponent {
     settings: AppSettings,
     list_state: ListState,
     section: SettingsSection,
-    editing: bool,
     status_message: Option<(String, bool)>,
     unsaved_changes: bool,
 }
@@ -179,14 +181,19 @@ impl SettingsComponent {
             settings,
             list_state: ListState::default().with_selected(Some(0)),
             section: SettingsSection::Theme,
-            editing: false,
             status_message: None,
             unsaved_changes: false,
         }
     }
 
     fn config_path() -> PathBuf {
-        PathBuf::from(CONFIG_DIR).join(CONFIG_FILE)
+        if crate::utils::root::is_root() {
+            PathBuf::from(CONFIG_DIR).join(CONFIG_FILE)
+        } else if let Ok(home) = env::var("HOME") {
+            PathBuf::from(home).join(USER_CONFIG_DIR).join(CONFIG_FILE)
+        } else {
+            PathBuf::from(CONFIG_FILE)
+        }
     }
 
     fn load_settings() -> AppSettings {
@@ -201,39 +208,21 @@ impl SettingsComponent {
         AppSettings::default()
     }
 
-    fn save_settings(&mut self) -> bool {
-        // Ensure config directory exists
-        if let Err(e) = fs::create_dir_all(CONFIG_DIR) {
-            self.status_message = Some((format!("Failed to create config dir: {}", e), true));
-            return false;
-        }
-
+    pub fn save(settings: &AppSettings) -> Result<String, String> {
         let path = Self::config_path();
-        match toml::to_string_pretty(&self.settings) {
-            Ok(content) => {
-                if let Err(e) = fs::write(&path, content) {
-                    self.status_message = Some((format!("Failed to save: {}", e), true));
-                    return false;
-                }
-                self.unsaved_changes = false;
-                self.status_message = Some(("Settings saved".to_string(), false));
-                true
-            }
-            Err(e) => {
-                self.status_message = Some((format!("Serialization error: {}", e), true));
-                false
-            }
-        }
+        let parent = path.parent().unwrap_or_else(|| Path::new("."));
+        fs::create_dir_all(parent).map_err(|err| err.to_string())?;
+
+        let content = toml::to_string_pretty(settings).map_err(|err| err.to_string())?;
+        atomic_write(&path, &content)
+            .map_err(|err| err.to_string())
+            .map(|_| format!("Settings saved to {}", path.display()))
     }
 
     fn get_section_items(&self) -> Vec<(&'static str, String, bool)> {
         match self.section {
             SettingsSection::Theme => {
-                vec![(
-                    "Color Theme",
-                    self.settings.theme.name().to_string(),
-                    true,
-                )]
+                vec![("Color Theme", self.settings.theme.name().to_string(), true)]
             }
             SettingsSection::Behavior => {
                 vec![
@@ -314,69 +303,71 @@ impl SettingsComponent {
                 };
                 self.settings.theme = themes[new_idx];
             }
-            SettingsSection::Behavior => {
-                match *name {
-                    "Confirm Actions" => {
-                        self.settings.confirm_actions = !self.settings.confirm_actions;
-                    }
-                    "Auto Refresh" => {
-                        self.settings.auto_refresh = !self.settings.auto_refresh;
-                    }
-                    "Refresh Interval" => {
-                        if forward {
-                            self.settings.refresh_interval =
-                                (self.settings.refresh_interval + 1).min(60);
-                        } else {
-                            self.settings.refresh_interval =
-                                self.settings.refresh_interval.saturating_sub(1).max(1);
-                        }
-                    }
-                    _ => {}
+            SettingsSection::Behavior => match *name {
+                "Confirm Actions" => {
+                    self.settings.confirm_actions = !self.settings.confirm_actions;
                 }
-            }
-            SettingsSection::Display => {
-                match *name {
-                    "Show Hidden Files" => {
-                        self.settings.show_hidden_files = !self.settings.show_hidden_files;
-                    }
-                    "Log Buffer Size" => {
-                        if forward {
-                            self.settings.log_lines = (self.settings.log_lines + 100).min(10000);
-                        } else {
-                            self.settings.log_lines =
-                                self.settings.log_lines.saturating_sub(100).max(100);
-                        }
-                    }
-                    "Default Tab" => {
-                        let tabs = [
-                            "updater",
-                            "sbotools",
-                            "user_setup",
-                            "mirror",
-                            "packages",
-                            "config",
-                        ];
-                        let current_idx = tabs
-                            .iter()
-                            .position(|&t| t == self.settings.default_tab)
-                            .unwrap_or(0);
-                        let new_idx = if forward {
-                            (current_idx + 1) % tabs.len()
-                        } else {
-                            (current_idx + tabs.len() - 1) % tabs.len()
-                        };
-                        self.settings.default_tab = tabs[new_idx].to_string();
-                    }
-                    _ => {}
+                "Auto Refresh" => {
+                    self.settings.auto_refresh = !self.settings.auto_refresh;
                 }
-            }
+                "Refresh Interval" => {
+                    if forward {
+                        self.settings.refresh_interval =
+                            (self.settings.refresh_interval + 1).min(60);
+                    } else {
+                        self.settings.refresh_interval =
+                            self.settings.refresh_interval.saturating_sub(1).max(1);
+                    }
+                }
+                _ => {}
+            },
+            SettingsSection::Display => match *name {
+                "Show Hidden Files" => {
+                    self.settings.show_hidden_files = !self.settings.show_hidden_files;
+                }
+                "Log Buffer Size" => {
+                    if forward {
+                        self.settings.log_lines = (self.settings.log_lines + 100).min(10000);
+                    } else {
+                        self.settings.log_lines =
+                            self.settings.log_lines.saturating_sub(100).max(100);
+                    }
+                }
+                "Default Tab" => {
+                    let tabs = [
+                        "updater",
+                        "sbotools",
+                        "user_setup",
+                        "mirror",
+                        "packages",
+                        "config",
+                    ];
+                    let current_idx = tabs
+                        .iter()
+                        .position(|&t| t == self.settings.default_tab)
+                        .unwrap_or(0);
+                    let new_idx = if forward {
+                        (current_idx + 1) % tabs.len()
+                    } else {
+                        (current_idx + tabs.len() - 1) % tabs.len()
+                    };
+                    self.settings.default_tab = tabs[new_idx].to_string();
+                }
+                _ => {}
+            },
         }
 
         self.unsaved_changes = true;
     }
+    pub fn settings(&self) -> AppSettings {
+        self.settings.clone()
+    }
 
-    pub fn get_theme(&self) -> ThemeChoice {
-        self.settings.theme
+    pub fn set_status(&mut self, message: String, is_error: bool) {
+        self.status_message = Some((message, is_error));
+        if !is_error {
+            self.unsaved_changes = false;
+        }
     }
 }
 
@@ -414,7 +405,7 @@ impl Component for SettingsComponent {
                 self.cycle_current_option(true);
             }
             KeyCode::Char('s') => {
-                self.save_settings();
+                return Some(Message::SaveSettings(self.settings()));
             }
             KeyCode::Char('r') => {
                 self.settings = AppSettings::default();
@@ -453,11 +444,7 @@ impl Component for SettingsComponent {
                 Span::raw("")
             },
         ]))
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .title(" Settings "),
-        );
+        .block(Block::default().borders(Borders::ALL).title(" Settings "));
         frame.render_widget(section_bar, chunks[0]);
 
         // Settings list
@@ -509,8 +496,7 @@ impl Component for SettingsComponent {
             ))
         };
 
-        let status = Paragraph::new(status_content)
-            .block(Block::default().borders(Borders::ALL));
+        let status = Paragraph::new(status_content).block(Block::default().borders(Borders::ALL));
         frame.render_widget(status, chunks[3]);
     }
 
@@ -548,14 +534,16 @@ impl SettingsComponent {
                 Span::styled("Muted ", Style::default().fg(colors.muted)),
                 Span::styled(
                     "Selected ",
-                    Style::default()
-                        .fg(colors.foreground)
-                        .bg(colors.primary),
+                    Style::default().fg(colors.foreground).bg(colors.primary),
                 ),
             ]),
             Line::from(Span::styled(
                 "The quick brown fox jumps over the lazy dog",
                 Style::default().fg(colors.foreground),
+            )),
+            Line::from(Span::styled(
+                " Background sample ",
+                Style::default().fg(colors.foreground).bg(colors.background),
             )),
         ];
 

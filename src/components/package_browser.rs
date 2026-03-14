@@ -80,8 +80,10 @@ impl PackageBrowserComponent {
                     // Read package info file for description
                     if let Ok(content) = fs::read_to_string(entry.path()) {
                         pkg.description = Self::extract_description(&content);
-                        pkg.size_compressed = Self::extract_size(&content, "COMPRESSED PACKAGE SIZE:");
-                        pkg.size_uncompressed = Self::extract_size(&content, "UNCOMPRESSED PACKAGE SIZE:");
+                        pkg.size_compressed =
+                            Self::extract_size(&content, "COMPRESSED PACKAGE SIZE:");
+                        pkg.size_uncompressed =
+                            Self::extract_size(&content, "UNCOMPRESSED PACKAGE SIZE:");
                     }
 
                     packages.push(pkg);
@@ -194,32 +196,13 @@ impl PackageBrowserComponent {
             .and_then(|&idx| self.packages.get(idx))
     }
 
-    fn remove_package(&mut self, name: &str) -> Option<Message> {
-        match std::process::Command::new("removepkg")
-            .arg(name)
-            .output()
-        {
-            Ok(output) => {
-                if output.status.success() {
-                    self.status_message = Some((
-                        format!("Package '{}' removed successfully", name),
-                        false,
-                    ));
-                    self.load_packages();
-                    self.apply_filter();
-                } else {
-                    let stderr = String::from_utf8_lossy(&output.stderr);
-                    self.status_message = Some((
-                        format!("Failed to remove package: {}", stderr),
-                        true,
-                    ));
-                }
-            }
-            Err(e) => {
-                self.status_message = Some((format!("Error executing removepkg: {}", e), true));
-            }
-        }
-        None
+    pub fn set_status(&mut self, message: String, is_error: bool) {
+        self.status_message = Some((message, is_error));
+    }
+
+    pub fn refresh_packages(&mut self) {
+        self.load_packages();
+        self.apply_filter();
     }
 }
 
@@ -230,7 +213,7 @@ impl Component for PackageBrowserComponent {
                 KeyCode::Char('y') | KeyCode::Char('Y') => {
                     self.show_confirm = false;
                     if let Some(pkg) = self.selected_package.take() {
-                        return self.remove_package(&pkg.full_name);
+                        return Some(Message::RemoveInstalledPackage(pkg.full_name));
                     }
                 }
                 KeyCode::Char('n') | KeyCode::Char('N') | KeyCode::Esc => {
@@ -284,7 +267,8 @@ impl Component for PackageBrowserComponent {
             }
             KeyCode::End => {
                 if !self.filtered_packages.is_empty() {
-                    self.list_state.select(Some(self.filtered_packages.len() - 1));
+                    self.list_state
+                        .select(Some(self.filtered_packages.len() - 1));
                 }
             }
             KeyCode::PageUp => {
@@ -294,7 +278,8 @@ impl Component for PackageBrowserComponent {
             }
             KeyCode::PageDown => {
                 if let Some(selected) = self.list_state.selected() {
-                    let new_idx = (selected + 10).min(self.filtered_packages.len().saturating_sub(1));
+                    let new_idx =
+                        (selected + 10).min(self.filtered_packages.len().saturating_sub(1));
                     self.list_state.select(Some(new_idx));
                 }
             }
@@ -408,8 +393,7 @@ impl Component for PackageBrowserComponent {
             Line::from(Span::raw("No package selected"))
         };
 
-        let status = Paragraph::new(status_content)
-            .block(Block::default().borders(Borders::ALL));
+        let status = Paragraph::new(status_content).block(Block::default().borders(Borders::ALL));
         frame.render_widget(status, chunks[2]);
     }
 
@@ -517,13 +501,21 @@ impl PackageBrowserComponent {
                 Span::raw(&pkg.size_uncompressed),
             ]),
             Line::from(""),
-            Line::from(Span::styled("Description:", Style::default().fg(Color::Cyan))),
+            Line::from(Span::styled(
+                "Description:",
+                Style::default().fg(Color::Cyan),
+            )),
             Line::from(""),
         ];
 
         let mut lines = details;
         // Wrap description text
-        for line in pkg.description.chars().collect::<Vec<_>>().chunks(inner.width as usize - 2) {
+        for line in pkg
+            .description
+            .chars()
+            .collect::<Vec<_>>()
+            .chunks(inner.width as usize - 2)
+        {
             lines.push(Line::from(Span::raw(line.iter().collect::<String>())));
         }
 

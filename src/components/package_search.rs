@@ -6,9 +6,8 @@ use ratatui::{
     widgets::{Block, Borders, List, ListItem, ListState, Paragraph},
     Frame,
 };
-use tokio::sync::mpsc;
 
-use super::{AsyncComponent, Component};
+use super::Component;
 use crate::app::Message;
 use crate::slackware::packages::PackageInfo;
 use crate::ui::theme::Theme;
@@ -21,7 +20,6 @@ pub struct PackageSearchComponent {
     is_searching: bool,
     is_installing: bool,
     status_message: Option<(String, bool)>,
-    progress_tx: Option<mpsc::UnboundedSender<String>>,
 }
 
 impl PackageSearchComponent {
@@ -33,7 +31,6 @@ impl PackageSearchComponent {
             is_searching: false,
             is_installing: false,
             status_message: None,
-            progress_tx: None,
         }
     }
 
@@ -49,10 +46,6 @@ impl PackageSearchComponent {
 
     pub fn get_selected_package(&self) -> Option<&PackageInfo> {
         self.list_state.selected().and_then(|i| self.results.get(i))
-    }
-
-    pub fn get_query(&self) -> &str {
-        &self.search_query
     }
 
     pub fn start_search(&mut self) {
@@ -229,15 +222,5 @@ impl Component for PackageSearchComponent {
             ("Tab", "Next result"),
             ("Ctrl+I", "Install"),
         ]
-    }
-}
-
-impl AsyncComponent for PackageSearchComponent {
-    fn set_progress_channel(&mut self, tx: mpsc::UnboundedSender<String>) {
-        self.progress_tx = Some(tx);
-    }
-
-    fn is_running(&self) -> bool {
-        self.is_searching || self.is_installing
     }
 }

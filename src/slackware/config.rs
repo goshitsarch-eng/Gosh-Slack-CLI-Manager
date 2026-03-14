@@ -4,6 +4,7 @@ use std::path::Path;
 use regex::Regex;
 
 use crate::utils::error::{AppError, Result};
+use crate::utils::fs::atomic_write;
 
 /// Detected bootloader type
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -22,9 +23,7 @@ impl Bootloader {
         }
 
         // Check for GRUB
-        if Path::new("/boot/grub/grub.cfg").exists()
-            || Path::new("/etc/default/grub").exists()
-        {
+        if Path::new("/boot/grub/grub.cfg").exists() || Path::new("/etc/default/grub").exists() {
             return Bootloader::Grub;
         }
 
@@ -56,51 +55,7 @@ impl SlackwareConfig {
         }
 
         let content = fs::read_to_string(mirrors_path)?;
-        let mut mirrors = Vec::new();
-
-        for line in content.lines() {
-            let trimmed = line.trim();
-
-            // Skip empty lines
-            if trimmed.is_empty() {
-                continue;
-            }
-
-            // Check if it's a comment with a URL (disabled mirror)
-            let (is_active, url) = if trimmed.starts_with('#') {
-                let url_part = trimmed.trim_start_matches('#').trim();
-                if url_part.starts_with("http://") || url_part.starts_with("https://")
-                    || url_part.starts_with("ftp://")
-                {
-                    (false, url_part.to_string())
-                } else {
-                    continue; // Just a comment, skip
-                }
-            } else if trimmed.starts_with("http://")
-                || trimmed.starts_with("https://")
-                || trimmed.starts_with("ftp://")
-            {
-                (true, trimmed.to_string())
-            } else {
-                continue;
-            };
-
-            // Apply version filter if specified
-            if let Some(filter) = version_filter {
-                if !url.contains(filter) {
-                    continue;
-                }
-            }
-
-            let region = Self::extract_region(&url);
-            mirrors.push(MirrorEntry {
-                url,
-                is_active,
-                region,
-            });
-        }
-
-        Ok(mirrors)
+        Ok(Self::parse_mirrors_from_content(&content, version_filter))
     }
 
     /// Extract region/country from mirror URL
@@ -143,48 +98,12 @@ impl SlackwareConfig {
         }
 
         let content = fs::read_to_string(mirrors_path)?;
-        let mut new_lines = Vec::new();
+        let new_content = Self::rewrite_mirrors_content(&content, mirror_url)?;
 
-        for line in content.lines() {
-            let trimmed = line.trim();
-
-            if trimmed.is_empty() || trimmed.starts_with('#') && !trimmed.contains("://") {
-                // Keep comments and empty lines as-is
-                new_lines.push(line.to_string());
-                continue;
-            }
-
-            // Extract URL from line (might be commented)
-            let url = trimmed.trim_start_matches('#').trim();
-
-            if url == mirror_url {
-                // This is the mirror to activate
-                new_lines.push(url.to_string());
-            } else if trimmed.starts_with('#') {
-                // Already commented, keep it
-                new_lines.push(line.to_string());
-            } else {
-                // Active mirror that's not the target, comment it out
-                new_lines.push(format!("# {}", trimmed));
-            }
-        }
-
-        fs::write(mirrors_path, new_lines.join("\n") + "\n")?;
+        let backup_path = mirrors_path.with_extension("bak");
+        let _ = fs::copy(mirrors_path, &backup_path);
+        atomic_write(mirrors_path, &new_content)?;
         Ok(())
-    }
-
-    /// Read a config file
-    pub fn read_config(path: &str) -> Result<String> {
-        fs::read_to_string(path).map_err(|e| {
-            AppError::FileOperation(format!("Failed to read {}: {}", path, e))
-        })
-    }
-
-    /// Write a config file
-    pub fn write_config(path: &str, content: &str) -> Result<()> {
-        fs::write(path, content).map_err(|e| {
-            AppError::FileOperation(format!("Failed to write {}: {}", path, e))
-        })
     }
 
     /// Modify /etc/inittab to change default runlevel
@@ -198,16 +117,108 @@ impl SlackwareConfig {
         }
 
         let content = fs::read_to_string(inittab_path)?;
-        let re = Regex::new(r"id:\d:initdefault:").map_err(|e| {
-            AppError::Config(format!("Regex error: {}", e))
-        })?;
+        let re = Regex::new(r"id:\d:initdefault:")
+            .map_err(|e| AppError::Config(format!("Regex error: {}", e)))?;
 
         let new_content = re
             .replace(&content, format!("id:{}:initdefault:", runlevel).as_str())
             .to_string();
 
-        fs::write(inittab_path, new_content)?;
+        atomic_write(inittab_path, &new_content)?;
         Ok(())
+    }
+
+    fn parse_mirrors_from_content(content: &str, version_filter: Option<&str>) -> Vec<MirrorEntry> {
+        let mut mirrors = Vec::new();
+
+        for line in content.lines() {
+            let trimmed = line.trim();
+
+            if trimmed.is_empty() {
+                continue;
+            }
+
+            let (is_active, url) = if trimmed.starts_with('#') {
+                let url_part = trimmed.trim_start_matches('#').trim();
+                if url_part.starts_with("http://")
+                    || url_part.starts_with("https://")
+                    || url_part.starts_with("ftp://")
+                {
+                    (false, url_part.to_string())
+                } else {
+                    continue;
+                }
+            } else if trimmed.starts_with("http://")
+                || trimmed.starts_with("https://")
+                || trimmed.starts_with("ftp://")
+            {
+                (true, trimmed.to_string())
+            } else {
+                continue;
+            };
+
+            if let Some(filter) = version_filter {
+                if !url.contains(filter) {
+                    continue;
+                }
+            }
+
+            mirrors.push(MirrorEntry {
+                region: Self::extract_region(&url),
+                url,
+                is_active,
+            });
+        }
+
+        mirrors
+    }
+
+    fn rewrite_mirrors_content(content: &str, mirror_url: &str) -> Result<String> {
+        let original_lines: Vec<&str> = content.lines().collect();
+        let exists = original_lines.iter().any(|line| {
+            let trimmed = line.trim();
+            let url = trimmed.trim_start_matches('#').trim();
+            url == mirror_url
+        });
+
+        if !exists {
+            return Err(AppError::Config(format!(
+                "Mirror '{}' was not found in mirrors file",
+                mirror_url
+            )));
+        }
+
+        let mut new_lines = Vec::new();
+        let mut active_mirrors = 0usize;
+
+        for line in &original_lines {
+            let trimmed = line.trim();
+
+            if trimmed.is_empty() || trimmed.starts_with('#') && !trimmed.contains("://") {
+                new_lines.push(line.to_string());
+                continue;
+            }
+
+            let url = trimmed.trim_start_matches('#').trim();
+
+            if url == mirror_url {
+                new_lines.push(url.to_string());
+                active_mirrors += 1;
+            } else if trimmed.starts_with('#') {
+                new_lines.push((*line).to_string());
+            } else {
+                new_lines.push(format!("# {}", trimmed));
+            }
+        }
+
+        if active_mirrors != 1 {
+            return Err(AppError::Config(format!(
+                "Mirror rewrite left {} active mirrors; expected exactly one",
+                active_mirrors
+            )));
+        }
+
+        Ok(new_lines.join("\n") + "\n")
     }
 }
 
@@ -219,9 +230,50 @@ pub struct MirrorEntry {
     pub region: String,
 }
 
-impl MirrorEntry {
-    pub fn display(&self) -> String {
-        let status = if self.is_active { "*" } else { " " };
-        format!("[{}] {} ({})", status, self.url, self.region)
+#[cfg(test)]
+mod tests {
+    use super::SlackwareConfig;
+
+    #[test]
+    fn parse_mirrors_filters_by_version_and_tracks_active_state() {
+        let content = r#"
+# comment
+https://mirror1.example/slackware64-15.0/
+# https://mirror2.example/slackware64-15.0/
+https://mirror3.example/slackware64-current/
+"#;
+
+        let mirrors =
+            SlackwareConfig::parse_mirrors_from_content(content, Some("slackware64-15.0"));
+
+        assert_eq!(mirrors.len(), 2);
+        assert!(mirrors[0].is_active);
+        assert!(!mirrors[1].is_active);
+        assert_eq!(mirrors[0].url, "https://mirror1.example/slackware64-15.0/");
+    }
+
+    #[test]
+    fn rewrite_mirrors_content_enables_exactly_one_mirror() {
+        let content = r#"
+# Slackware mirrors
+https://mirror1.example/slackware64-15.0/
+# https://mirror2.example/slackware64-15.0/
+"#;
+
+        let rewritten = SlackwareConfig::rewrite_mirrors_content(
+            content,
+            "https://mirror2.example/slackware64-15.0/",
+        )
+        .unwrap();
+
+        assert!(rewritten.contains("# https://mirror1.example/slackware64-15.0/"));
+        assert!(rewritten.contains("https://mirror2.example/slackware64-15.0/"));
+        assert_eq!(
+            rewritten
+                .lines()
+                .filter(|line| line.starts_with("https://"))
+                .count(),
+            1
+        );
     }
 }

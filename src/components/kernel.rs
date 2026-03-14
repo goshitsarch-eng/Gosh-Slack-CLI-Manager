@@ -45,7 +45,6 @@ pub enum BootloaderType {
 #[derive(Debug, Clone)]
 pub enum KernelAction {
     SetDefault(String),
-    RemoveKernel(String),
     RunLilo,
 }
 
@@ -117,7 +116,9 @@ impl KernelComponent {
 
                     let size = entry.metadata().map(|m| m.len()).unwrap_or(0);
 
-                    let is_current = self.current_kernel.contains(&version.replace("-generic", "").replace("-huge", ""));
+                    let is_current = self
+                        .current_kernel
+                        .contains(&version.replace("-generic", "").replace("-huge", ""));
                     let is_default = self.is_default_kernel(&name);
 
                     self.kernels.push(KernelInfo {
@@ -158,7 +159,9 @@ impl KernelComponent {
                         }
                         if line.starts_with("label") {
                             if let Some(label) = line.split('=').nth(1) {
-                                if label.trim() == default_label && current_image.contains(kernel_name) {
+                                if label.trim() == default_label
+                                    && current_image.contains(kernel_name)
+                                {
                                     return true;
                                 }
                             }
@@ -175,91 +178,59 @@ impl KernelComponent {
         self.list_state.selected().and_then(|i| self.kernels.get(i))
     }
 
-    fn set_default_kernel(&mut self, version: &str) -> Option<Message> {
-        match self.bootloader {
-            BootloaderType::Lilo => {
-                // Modify lilo.conf to set default
-                if let Ok(content) = fs::read_to_string("/etc/lilo.conf") {
-                    let mut new_content = String::new();
-                    let mut found_label = String::new();
+    pub fn build_lilo_default_config(version: &str) -> Result<String, String> {
+        let content = fs::read_to_string("/etc/lilo.conf").map_err(|err| err.to_string())?;
+        let mut new_content = String::new();
+        let mut found_label = String::new();
 
-                    // First pass: find the label for this kernel
-                    let mut current_image = String::new();
-                    for line in content.lines() {
-                        let line_trimmed = line.trim();
-                        if line_trimmed.starts_with("image") {
-                            if let Some(path) = line_trimmed.split('=').nth(1) {
-                                current_image = path.trim().to_string();
-                            }
-                        }
-                        if line_trimmed.starts_with("label") && current_image.contains(version) {
-                            if let Some(label) = line_trimmed.split('=').nth(1) {
-                                found_label = label.trim().to_string();
-                                break;
-                            }
-                        }
-                    }
-
-                    if found_label.is_empty() {
-                        self.status_message = Some(("Kernel not found in lilo.conf".to_string(), true));
-                        return None;
-                    }
-
-                    // Second pass: update default
-                    let mut default_set = false;
-                    for line in content.lines() {
-                        if line.trim().starts_with("default") {
-                            new_content.push_str(&format!("default = {}\n", found_label));
-                            default_set = true;
-                        } else {
-                            new_content.push_str(line);
-                            new_content.push('\n');
-                        }
-                    }
-
-                    if !default_set {
-                        // Add default if not present
-                        new_content = format!("default = {}\n{}", found_label, new_content);
-                    }
-
-                    if let Err(e) = fs::write("/etc/lilo.conf", new_content) {
-                        self.status_message = Some((format!("Failed to update lilo.conf: {}", e), true));
-                        return None;
-                    }
-
-                    self.status_message = Some((
-                        format!("Default set to {}. Run lilo to apply!", found_label),
-                        false,
-                    ));
+        let mut current_image = String::new();
+        for line in content.lines() {
+            let line_trimmed = line.trim();
+            if line_trimmed.starts_with("image") {
+                if let Some(path) = line_trimmed.split('=').nth(1) {
+                    current_image = path.trim().to_string();
                 }
             }
-            BootloaderType::Grub => {
-                self.status_message = Some(("GRUB configuration editing not yet supported".to_string(), true));
-            }
-            BootloaderType::Unknown => {
-                self.status_message = Some(("No known bootloader detected".to_string(), true));
+            if line_trimmed.starts_with("label") && current_image.contains(version) {
+                if let Some(label) = line_trimmed.split('=').nth(1) {
+                    found_label = label.trim().to_string();
+                    break;
+                }
             }
         }
 
-        self.load_kernel_info();
-        None
+        if found_label.is_empty() {
+            return Err("Kernel not found in lilo.conf".to_string());
+        }
+
+        let mut default_set = false;
+        for line in content.lines() {
+            if line.trim().starts_with("default") {
+                new_content.push_str(&format!("default = {found_label}\n"));
+                default_set = true;
+            } else {
+                new_content.push_str(line);
+                new_content.push('\n');
+            }
+        }
+
+        if !default_set {
+            new_content = format!("default = {found_label}\n{new_content}");
+        }
+
+        Ok(new_content)
     }
 
-    fn run_lilo(&mut self) -> Option<Message> {
-        match std::process::Command::new("lilo").output() {
-            Ok(output) => {
-                if output.status.success() {
-                    self.status_message = Some(("LILO updated successfully".to_string(), false));
-                } else {
-                    let stderr = String::from_utf8_lossy(&output.stderr);
-                    self.status_message = Some((format!("LILO failed: {}", stderr), true));
-                }
-            }
-            Err(e) => {
-                self.status_message = Some((format!("Failed to run lilo: {}", e), true));
-            }
-        }
-        None
+    pub fn refresh(&mut self) {
+        self.load_kernel_info();
+    }
+
+    pub fn set_status(&mut self, message: String, is_error: bool) {
+        self.status_message = Some((message, is_error));
+    }
+
+    pub fn bootloader(&self) -> BootloaderType {
+        self.bootloader
     }
 
     fn format_size(bytes: u64) -> String {
@@ -275,14 +246,7 @@ impl Component for KernelComponent {
                 KeyCode::Char('y') | KeyCode::Char('Y') => {
                     self.show_confirm = false;
                     if let Some(action) = self.pending_action.take() {
-                        return match action {
-                            KernelAction::SetDefault(version) => self.set_default_kernel(&version),
-                            KernelAction::RemoveKernel(_) => {
-                                self.status_message = Some(("Kernel removal not implemented for safety".to_string(), true));
-                                None
-                            }
-                            KernelAction::RunLilo => self.run_lilo(),
-                        };
+                        return Some(Message::KernelAction(action));
                     }
                 }
                 KeyCode::Char('n') | KeyCode::Char('N') | KeyCode::Esc => {
@@ -390,19 +354,21 @@ impl Component for KernelComponent {
                 }
 
                 ListItem::new(vec![
-                    Line::from(vec![
-                        Span::styled(
-                            format!("{:<40}", kernel.version),
-                            Style::default().add_modifier(Modifier::BOLD),
-                        ),
-                        Span::styled(
-                            format!("{:<10}", kernel.variant),
-                            Style::default().fg(Color::Cyan),
-                        ),
-                    ]
-                    .into_iter()
-                    .chain(status_parts)
-                    .collect::<Vec<_>>()),
+                    Line::from(
+                        vec![
+                            Span::styled(
+                                format!("{:<40}", kernel.version),
+                                Style::default().add_modifier(Modifier::BOLD),
+                            ),
+                            Span::styled(
+                                format!("{:<10}", kernel.variant),
+                                Style::default().fg(Color::Cyan),
+                            ),
+                        ]
+                        .into_iter()
+                        .chain(status_parts)
+                        .collect::<Vec<_>>(),
+                    ),
                     Line::from(vec![
                         Span::styled("    Path: ", Style::default().fg(Color::DarkGray)),
                         Span::raw(&kernel.path),
@@ -429,7 +395,6 @@ impl Component for KernelComponent {
         let status_content = if self.show_confirm {
             let action_desc = match &self.pending_action {
                 Some(KernelAction::SetDefault(v)) => format!("Set {} as default?", v),
-                Some(KernelAction::RemoveKernel(v)) => format!("Remove kernel {}?", v),
                 Some(KernelAction::RunLilo) => "Run lilo to update bootloader?".to_string(),
                 None => "Confirm action?".to_string(),
             };
@@ -449,8 +414,7 @@ impl Component for KernelComponent {
             ))
         };
 
-        let status = Paragraph::new(status_content)
-            .block(Block::default().borders(Borders::ALL));
+        let status = Paragraph::new(status_content).block(Block::default().borders(Borders::ALL));
         frame.render_widget(status, chunks[2]);
     }
 

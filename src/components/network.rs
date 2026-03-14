@@ -29,10 +29,8 @@ pub struct NetworkComponent {
     interfaces: Vec<NetworkInterface>,
     list_state: ListState,
     mode: NetworkMode,
-    edit_field: usize,
-    edit_buffer: String,
-    is_editing: bool,
     dns_servers: Vec<String>,
+    default_gateway: String,
     hostname: String,
     status_message: Option<(String, bool)>,
     show_confirm: bool,
@@ -41,8 +39,7 @@ pub struct NetworkComponent {
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum NetworkMode {
     Overview,
-    EditInterface,
-    DNS,
+    Dns,
 }
 
 impl NetworkComponent {
@@ -51,10 +48,8 @@ impl NetworkComponent {
             interfaces: Vec::new(),
             list_state: ListState::default(),
             mode: NetworkMode::Overview,
-            edit_field: 0,
-            edit_buffer: String::new(),
-            is_editing: false,
             dns_servers: Vec::new(),
+            default_gateway: "Not set".to_string(),
             hostname: String::new(),
             status_message: None,
             show_confirm: false,
@@ -70,6 +65,7 @@ impl NetworkComponent {
         self.interfaces.clear();
         self.load_interfaces();
         self.load_dns();
+        self.load_default_gateway();
         self.load_hostname();
     }
 
@@ -103,7 +99,9 @@ impl NetworkComponent {
                 // Check if interface is up
                 let flags_path = format!("/sys/class/net/{}/flags", name);
                 if let Ok(flags) = fs::read_to_string(&flags_path) {
-                    if let Ok(flags_val) = u32::from_str_radix(flags.trim().trim_start_matches("0x"), 16) {
+                    if let Ok(flags_val) =
+                        u32::from_str_radix(flags.trim().trim_start_matches("0x"), 16)
+                    {
                         iface.is_up = flags_val & 1 != 0; // IFF_UP
                     }
                 }
@@ -133,7 +131,7 @@ impl NetworkComponent {
                 if let Ok(config) = fs::read_to_string("/etc/rc.d/rc.inet1.conf") {
                     iface.use_dhcp = Self::is_dhcp_enabled(&config, &name);
                     if !iface.use_dhcp {
-                        if let Some(gw) = Self::get_config_value(&config, &format!("GATEWAY")) {
+                        if let Some(gw) = Self::get_config_value(&config, "GATEWAY") {
                             iface.gateway = gw;
                         }
                     }
@@ -148,11 +146,7 @@ impl NetworkComponent {
 
     fn cidr_to_netmask(cidr: &str) -> String {
         let bits: u32 = cidr.parse().unwrap_or(24);
-        let mask = if bits == 0 {
-            0
-        } else {
-            !0u32 << (32 - bits)
-        };
+        let mask = if bits == 0 { 0 } else { !0u32 << (32 - bits) };
         format!(
             "{}.{}.{}.{}",
             (mask >> 24) & 255,
@@ -214,29 +208,32 @@ impl NetworkComponent {
         }
     }
 
-    fn selected_interface(&self) -> Option<&NetworkInterface> {
-        self.list_state.selected().and_then(|i| self.interfaces.get(i))
+    fn load_default_gateway(&mut self) {
+        self.default_gateway = std::process::Command::new("ip")
+            .args(["route", "show", "default"])
+            .output()
+            .ok()
+            .and_then(|output| {
+                let stdout = String::from_utf8_lossy(&output.stdout);
+                stdout.lines().next().and_then(|line| {
+                    line.split_whitespace()
+                        .skip_while(|word| *word != "via")
+                        .nth(1)
+                        .map(str::to_string)
+                })
+            })
+            .unwrap_or_else(|| "Not set".to_string());
     }
 
-    fn restart_network(&mut self) {
+    pub fn set_status(&mut self, message: String, is_error: bool) {
+        self.status_message = Some((message, is_error));
+    }
+
+    pub fn restart_started(&mut self) {
         self.status_message = Some(("Restarting network...".to_string(), false));
+    }
 
-        match std::process::Command::new("/etc/rc.d/rc.inet1")
-            .arg("restart")
-            .output()
-        {
-            Ok(output) => {
-                if output.status.success() {
-                    self.status_message = Some(("Network restarted successfully".to_string(), false));
-                } else {
-                    self.status_message = Some(("Failed to restart network".to_string(), true));
-                }
-            }
-            Err(e) => {
-                self.status_message = Some((format!("Error: {}", e), true));
-            }
-        }
-
+    pub fn refresh(&mut self) {
         self.load_network_info();
     }
 }
@@ -247,7 +244,7 @@ impl Component for NetworkComponent {
             match key.code {
                 KeyCode::Char('y') | KeyCode::Char('Y') => {
                     self.show_confirm = false;
-                    self.restart_network();
+                    return Some(Message::RestartNetwork);
                 }
                 KeyCode::Char('n') | KeyCode::Char('N') | KeyCode::Esc => {
                     self.show_confirm = false;
@@ -257,35 +254,17 @@ impl Component for NetworkComponent {
             return None;
         }
 
-        if self.is_editing {
-            match key.code {
-                KeyCode::Enter | KeyCode::Esc => {
-                    self.is_editing = false;
-                }
-                KeyCode::Backspace => {
-                    self.edit_buffer.pop();
-                }
-                KeyCode::Char(c) => {
-                    self.edit_buffer.push(c);
-                }
-                _ => {}
-            }
-            return None;
-        }
-
         match key.code {
             KeyCode::Tab => {
                 self.mode = match self.mode {
-                    NetworkMode::Overview => NetworkMode::DNS,
-                    NetworkMode::DNS => NetworkMode::Overview,
-                    NetworkMode::EditInterface => NetworkMode::Overview,
+                    NetworkMode::Overview => NetworkMode::Dns,
+                    NetworkMode::Dns => NetworkMode::Overview,
                 };
             }
             KeyCode::Up | KeyCode::Char('k') => {
                 let len = match self.mode {
                     NetworkMode::Overview => self.interfaces.len(),
-                    NetworkMode::DNS => self.dns_servers.len(),
-                    NetworkMode::EditInterface => 4, // IP, Netmask, Gateway, DHCP
+                    NetworkMode::Dns => self.dns_servers.len(),
                 };
                 if let Some(selected) = self.list_state.selected() {
                     if selected > 0 {
@@ -298,8 +277,7 @@ impl Component for NetworkComponent {
             KeyCode::Down | KeyCode::Char('j') => {
                 let len = match self.mode {
                     NetworkMode::Overview => self.interfaces.len(),
-                    NetworkMode::DNS => self.dns_servers.len(),
-                    NetworkMode::EditInterface => 4,
+                    NetworkMode::Dns => self.dns_servers.len(),
                 };
                 if let Some(selected) = self.list_state.selected() {
                     if selected < len.saturating_sub(1) {
@@ -335,8 +313,7 @@ impl Component for NetworkComponent {
         // Mode bar
         let mode_text = match self.mode {
             NetworkMode::Overview => "[Interfaces]  DNS",
-            NetworkMode::DNS => " Interfaces  [DNS]",
-            NetworkMode::EditInterface => " Edit Interface ",
+            NetworkMode::Dns => " Interfaces  [DNS]",
         };
         let mode_bar = Paragraph::new(Line::from(vec![
             Span::styled("View: ", Style::default().fg(Color::Cyan)),
@@ -356,8 +333,7 @@ impl Component for NetworkComponent {
         // Main content
         match self.mode {
             NetworkMode::Overview => self.render_interfaces(frame, chunks[1]),
-            NetworkMode::DNS => self.render_dns(frame, chunks[1]),
-            NetworkMode::EditInterface => self.render_edit(frame, chunks[1]),
+            NetworkMode::Dns => self.render_dns(frame, chunks[1]),
         }
 
         // Info panel
@@ -381,8 +357,7 @@ impl Component for NetworkComponent {
             ))
         };
 
-        let status = Paragraph::new(status_content)
-            .block(Block::default().borders(Borders::ALL));
+        let status = Paragraph::new(status_content).block(Block::default().borders(Borders::ALL));
         frame.render_widget(status, chunks[3]);
     }
 
@@ -455,10 +430,7 @@ impl NetworkComponent {
             .enumerate()
             .map(|(i, server)| {
                 ListItem::new(Line::from(vec![
-                    Span::styled(
-                        format!("DNS {}: ", i + 1),
-                        Style::default().fg(Color::Cyan),
-                    ),
+                    Span::styled(format!("DNS {}: ", i + 1), Style::default().fg(Color::Cyan)),
                     Span::raw(server),
                 ]))
             })
@@ -483,14 +455,6 @@ impl NetworkComponent {
         let mut state = self.list_state.clone();
         frame.render_stateful_widget(list, area, &mut state);
     }
-
-    fn render_edit(&self, frame: &mut Frame, area: Rect) {
-        let block = Block::default()
-            .borders(Borders::ALL)
-            .title(" Edit Interface ");
-        frame.render_widget(block, area);
-    }
-
     fn render_info(&self, frame: &mut Frame, area: Rect) {
         let block = Block::default()
             .borders(Borders::ALL)
@@ -499,29 +463,10 @@ impl NetworkComponent {
         let inner = block.inner(area);
         frame.render_widget(block, area);
 
-        // Get default gateway
-        let gateway = std::process::Command::new("ip")
-            .args(["route", "show", "default"])
-            .output()
-            .ok()
-            .and_then(|o| {
-                let stdout = String::from_utf8_lossy(&o.stdout);
-                stdout
-                    .lines()
-                    .next()
-                    .and_then(|line| {
-                        line.split_whitespace()
-                            .skip_while(|&w| w != "via")
-                            .nth(1)
-                            .map(|s| s.to_string())
-                    })
-            })
-            .unwrap_or_else(|| "Not set".to_string());
-
         let info = vec![
             Line::from(vec![
                 Span::styled("Default Gateway: ", Style::default().fg(Color::Cyan)),
-                Span::raw(&gateway),
+                Span::raw(&self.default_gateway),
             ]),
             Line::from(vec![
                 Span::styled("DNS Servers:     ", Style::default().fg(Color::Cyan)),
