@@ -82,6 +82,10 @@ The header shows when the app is running in read-only mode. Actions that require
 - System file writes use atomic replacement for supported config paths.
 - Mirror changes validate that exactly one active mirror remains configured.
 
+## Release Notes
+
+Current release notes and milestone summaries live in [CHANGELOG.md](CHANGELOG.md).
+
 ## Development
 
 ```bash
