@@ -44,6 +44,26 @@ Supported Slackware versions are detected from `/etc/slackware-version`. The cod
 
 ## Installation
 
+### Prebuilt release assets
+
+GitHub releases now publish two installable assets for tagged versions:
+
+- a portable static binary archive for `x86_64`
+- a Slackware package: `slackware-cli-manager-<version>-x86_64-1.txz`
+
+Slackware package install:
+
+```bash
+sudo upgradepkg --install-new slackware-cli-manager-0.1.0-x86_64-1.txz
+```
+
+Portable archive install:
+
+```bash
+tar -xzf slackware-cli-manager-v0.1.0-x86_64-unknown-linux-musl.tar.gz
+sudo install -m 0755 slackware-cli-manager-v0.1.0-x86_64-unknown-linux-musl/slackware-cli-manager /usr/local/bin/slackware-cli-manager
+```
+
 ### From crates.io
 
 ```bash
