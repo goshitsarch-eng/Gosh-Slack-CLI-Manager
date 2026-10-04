@@ -143,7 +143,8 @@ impl BackupComponent {
             }
         }
 
-        self.backups.sort_by(|a, b| b.timestamp.cmp(&a.timestamp));
+        self.backups
+            .sort_by_key(|backup| std::cmp::Reverse(backup.timestamp));
     }
 
     fn calculate_backup_stats(path: &Path) -> (usize, u64) {

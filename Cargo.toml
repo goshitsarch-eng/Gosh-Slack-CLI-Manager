@@ -10,7 +10,7 @@ homepage = "https://github.com/goshitsarch-eng/Gosh-Slack-CLI-Manager"
 keywords = ["slackware", "tui", "linux", "package-manager", "cli"]
 categories = ["command-line-utilities"]
 readme = "README.md"
-rust-version = "1.70"
+rust-version = "1.88"
 
 [dependencies]
 ratatui = "0.29"

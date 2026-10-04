@@ -36,6 +36,10 @@ pub struct ConfigEditorComponent {
 }
 
 impl ConfigEditorComponent {
+    pub fn is_editing(&self) -> bool {
+        self.mode == EditorMode::Editing
+    }
+
     fn selected_file_entry(&self) -> Option<(&'static str, &'static str)> {
         self.file_list_state
             .selected()
@@ -64,7 +68,8 @@ impl ConfigEditorComponent {
     pub fn load_file(&mut self, path: &str) -> Result<(), String> {
         use std::fs;
 
-        let content = fs::read_to_string(path).map_err(|e| e.to_string())?;
+        let content =
+            fs::read_to_string(path).map_err(|e| format!("Unable to open {path}: {e}"))?;
 
         self.textarea = TextArea::from(content.lines());
         self.textarea.set_block(
@@ -300,6 +305,7 @@ impl Component for ConfigEditorComponent {
                 };
                 frame.render_widget(
                     Paragraph::new(inspector_lines)
+                        .wrap(ratatui::widgets::Wrap { trim: true })
                         .block(Theme::panel_alt(Theme::panel_title("Inspector"))),
                     content[1],
                 );
@@ -343,6 +349,7 @@ impl Component for ConfigEditorComponent {
                 ];
                 frame.render_widget(
                     Paragraph::new(inspector_lines)
+                        .wrap(ratatui::widgets::Wrap { trim: true })
                         .block(Theme::panel_alt(Theme::panel_title("Inspector"))),
                     content[1],
                 );

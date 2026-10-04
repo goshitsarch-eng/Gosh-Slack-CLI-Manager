@@ -30,14 +30,14 @@ pub struct AppLayout {
 }
 
 impl AppLayout {
-    pub fn new(area: Rect) -> Self {
+    pub fn new(area: Rect, status_height: u16) -> Self {
         let chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Length(4), // Header
-                Constraint::Length(4), // Navigation
-                Constraint::Min(10),   // Main content
-                Constraint::Length(1), // Status rail
+                Constraint::Length(5),             // Header: three lines and borders
+                Constraint::Length(5),             // Navigation: three shortcut lanes and borders
+                Constraint::Min(10),               // Main content
+                Constraint::Length(status_height), // Wrapped controls
             ])
             .split(area);
 

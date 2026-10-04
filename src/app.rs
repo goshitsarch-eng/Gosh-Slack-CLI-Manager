@@ -266,6 +266,14 @@ impl App {
             }
         }
 
+        if self.current_tab == Tab::Config
+            && self.config_editor.is_editing()
+            && key.modifiers.contains(KeyModifiers::CONTROL)
+            && matches!(key.code, KeyCode::Char('s' | 'q' | 'x'))
+        {
+            return self.config_editor.handle_input(key);
+        }
+
         if key.modifiers.contains(KeyModifiers::CONTROL) {
             match key.code {
                 KeyCode::Char('c') | KeyCode::Char('q') => {
@@ -1145,9 +1153,30 @@ impl App {
 
     /// Render the UI
     pub fn render(&self, frame: &mut Frame) {
+        if frame.area().width < 80 || frame.area().height < 24 {
+            frame.render_widget(
+                Paragraph::new("Terminal too small. Resize to at least 80x24. Ctrl+Q quits.")
+                    .wrap(ratatui::widgets::Wrap { trim: true }),
+                frame.area(),
+            );
+            return;
+        }
         frame.render_widget(Block::default().style(Theme::app()), frame.area());
 
-        let layout = AppLayout::new(frame.area());
+        let help = self.get_current_help();
+        let mut keys = vec![("Alt+←/→", "Tab"), ("Ctrl+Q", "Quit")];
+        keys.extend(help);
+        if !self.is_root {
+            keys.push(("Read-only", "Mutating actions disabled"));
+        }
+        let controls_width = 12
+            + keys
+                .iter()
+                .map(|(key, desc)| key.chars().count() + desc.chars().count() + 8)
+                .sum::<usize>();
+        let status_height =
+            (controls_width.div_ceil(frame.area().width as usize) + 1).min(4) as u16;
+        let layout = AppLayout::new(frame.area(), status_height);
         let header_chunks = Layout::default()
             .direction(Direction::Horizontal)
             .constraints([Constraint::Min(32), Constraint::Length(36)])
@@ -1155,8 +1184,6 @@ impl App {
 
         let header = Paragraph::new(vec![
             Line::from(vec![
-                Span::styled("OPERATIONS CONSOLE", Theme::eyebrow()),
-                Span::styled("  //  ", Theme::divider()),
                 Span::styled("SLACKWARE", Theme::hero()),
                 Span::styled(" CLI MANAGER", Theme::title()),
             ]),
@@ -1166,10 +1193,7 @@ impl App {
             ]),
             Line::from(vec![
                 Span::styled("Layout ", Theme::label()),
-                Span::styled(
-                    "dense panels, inspector rails, live state badges",
-                    Theme::accent(),
-                ),
+                Span::styled("responsive terminal panels", Theme::accent()),
             ]),
         ])
         .block(Theme::panel(Theme::panel_title("Command Deck")));
@@ -1195,10 +1219,7 @@ impl App {
             ]),
             Line::from(vec![
                 Span::styled("Navigation ", Theme::label()),
-                Span::styled(
-                    "split into primary, secondary, and utility lanes",
-                    Theme::subtitle(),
-                ),
+                Span::styled("F1–F12 / Ctrl / Alt", Theme::subtitle()),
             ]),
         ])
         .block(Theme::panel_alt(Theme::panel_title("Runtime")));
@@ -1225,13 +1246,6 @@ impl App {
             Tab::Settings => self.settings.render(frame, layout.content),
         }
 
-        let help = self.get_current_help();
-        let mut keys = vec![("Alt+←/→", "Tab"), ("Ctrl+Q", "Quit")];
-        keys.extend(help);
-        if !self.is_root {
-            keys.push(("Read-only", "Mutating actions disabled"));
-        }
-
         let access_mode = if self.is_root { "root" } else { "read-only" };
         let status_message = format!(
             "{} tab active on {} track in {} mode",
@@ -1254,7 +1268,11 @@ impl App {
 
         let chunks = Layout::default()
             .direction(Direction::Vertical)
-            .constraints([Constraint::Length(1), Constraint::Length(1)])
+            .constraints([
+                Constraint::Length(1),
+                Constraint::Length(1),
+                Constraint::Length(1),
+            ])
             .split(inner);
 
         let primary_tabs: Vec<Span> = Tab::primary_tabs()
@@ -1273,7 +1291,7 @@ impl App {
             chunks[0],
         );
 
-        let mut secondary_spans: Vec<Span> = Tab::secondary_tabs()
+        let secondary_spans: Vec<Span> = Tab::secondary_tabs()
             .iter()
             .map(|tab| {
                 let style = if *tab == self.current_tab {
@@ -1284,15 +1302,14 @@ impl App {
                 Span::styled(format!(" {} {} ", tab.shortcut(), tab.title()), style)
             })
             .collect();
-        secondary_spans.push(Span::styled("  //  ", Theme::tab_separator()));
-
+        let mut utility_spans = Vec::new();
         for tab in Tab::additional_tabs() {
             let style = if tab == self.current_tab {
                 Theme::tab_active()
             } else {
                 Theme::tab_inactive()
             };
-            secondary_spans.push(Span::styled(
+            utility_spans.push(Span::styled(
                 format!(" {} {} ", tab.shortcut(), tab.title()),
                 style,
             ));
@@ -1301,6 +1318,10 @@ impl App {
         frame.render_widget(
             Paragraph::new(Line::from(secondary_spans)).style(Theme::surface()),
             chunks[1],
+        );
+        frame.render_widget(
+            Paragraph::new(Line::from(utility_spans)).style(Theme::surface()),
+            chunks[2],
         );
     }
 
@@ -1384,6 +1405,75 @@ mod tests {
             app.switch_to_tab(tab);
             terminal.draw(|frame| app.render(frame)).unwrap();
         }
+    }
+
+    #[test]
+    fn renders_all_tabs_at_small_and_wide_sizes() {
+        let mut app = App::new(SlackwareVersion::Current, false);
+        for (width, height) in [(1, 1), (20, 5), (40, 12), (80, 24), (200, 20), (60, 60)] {
+            let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
+            for tab in Tab::all() {
+                app.switch_to_tab(tab);
+                terminal.draw(|frame| app.render(frame)).unwrap();
+            }
+        }
+    }
+
+    #[test]
+    fn compact_user_form_keeps_fields_errors_and_last_toggle_visible() {
+        let mut app = App::new(SlackwareVersion::Current, false);
+        app.switch_to_tab(Tab::UserSetup);
+        app.user_setup
+            .handle_input(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+        for _ in 0..13 {
+            app.user_setup
+                .handle_input(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
+        }
+        let mut terminal = Terminal::new(TestBackend::new(80, 24)).unwrap();
+        terminal.draw(|frame| app.render(frame)).unwrap();
+        let text: String = terminal
+            .backend()
+            .buffer()
+            .content
+            .iter()
+            .map(|cell| cell.symbol())
+            .collect();
+        for label in [
+            "User:",
+            "Password:",
+            "Confirm:",
+            "Username cannot be empty",
+            "Change runlevel",
+        ] {
+            assert!(text.contains(label), "missing {label}");
+        }
+    }
+
+    #[test]
+    fn editor_shortcuts_take_precedence_over_global_shortcuts() {
+        let mut app = App::new(SlackwareVersion::Current, false);
+        app.switch_to_tab(Tab::Config);
+        let path = std::env::temp_dir().join(format!("slackware-editor-{}", std::process::id()));
+        std::fs::write(&path, "original\n").unwrap();
+        app.config_editor.load_file(path.to_str().unwrap()).unwrap();
+        std::fs::remove_file(&path).unwrap();
+        app.handle_input(KeyEvent::new(KeyCode::Char('x'), KeyModifiers::NONE));
+        assert!(matches!(
+            app.handle_input(KeyEvent::new(KeyCode::Char('s'), KeyModifiers::CONTROL)),
+            Some(Message::SaveConfig { .. })
+        ));
+        assert_eq!(app.current_tab, Tab::Config);
+        assert!(app
+            .handle_input(KeyEvent::new(KeyCode::Char('q'), KeyModifiers::CONTROL))
+            .is_none());
+        assert!(app.config_editor.is_editing());
+        assert!(app.running);
+        app.handle_input(KeyEvent::new(KeyCode::Char('x'), KeyModifiers::CONTROL));
+        assert!(!app.config_editor.is_editing());
+        assert!(matches!(
+            app.handle_input(KeyEvent::new(KeyCode::Char('q'), KeyModifiers::CONTROL)),
+            Some(Message::Quit)
+        ));
     }
 
     #[test]
