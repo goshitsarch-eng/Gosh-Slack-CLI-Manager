@@ -90,7 +90,7 @@ impl PackageBrowserComponent {
             }
         }
 
-        packages.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+        packages.sort_by_key(|package| package.name.to_lowercase());
         self.packages = packages;
     }
 

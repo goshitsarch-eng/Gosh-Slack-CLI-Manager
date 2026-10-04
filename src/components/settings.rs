@@ -176,12 +176,12 @@ pub struct SettingsComponent {
 
 impl SettingsComponent {
     pub fn new() -> Self {
-        let settings = Self::load_settings();
+        let (settings, status_message) = Self::load_settings();
         Self {
             settings,
             list_state: ListState::default().with_selected(Some(0)),
             section: SettingsSection::Theme,
-            status_message: None,
+            status_message,
             unsaved_changes: false,
         }
     }
@@ -189,6 +189,11 @@ impl SettingsComponent {
     fn config_path() -> PathBuf {
         if crate::utils::root::is_root() {
             PathBuf::from(CONFIG_DIR).join(CONFIG_FILE)
+        } else if let Some(config_home) = env::var_os("XDG_CONFIG_HOME")
+            .map(PathBuf::from)
+            .filter(|path| path.is_absolute())
+        {
+            config_home.join("slackware-cli-manager").join(CONFIG_FILE)
         } else if let Ok(home) = env::var("HOME") {
             PathBuf::from(home).join(USER_CONFIG_DIR).join(CONFIG_FILE)
         } else {
@@ -196,16 +201,36 @@ impl SettingsComponent {
         }
     }
 
-    fn load_settings() -> AppSettings {
+    fn load_settings() -> (AppSettings, Option<(String, bool)>) {
         let path = Self::config_path();
-        if path.exists() {
-            if let Ok(content) = fs::read_to_string(&path) {
-                if let Ok(settings) = toml::from_str(&content) {
-                    return settings;
-                }
+        match fs::read_to_string(&path) {
+            Ok(content) => match toml::from_str(&content) {
+                Ok(settings) => (settings, None),
+                Err(error) => (
+                    AppSettings::default(),
+                    Some((
+                        format!(
+                            "Invalid settings at {}: {error}. Using defaults.",
+                            path.display()
+                        ),
+                        true,
+                    )),
+                ),
+            },
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                (AppSettings::default(), None)
             }
+            Err(error) => (
+                AppSettings::default(),
+                Some((
+                    format!(
+                        "Unable to load settings at {}: {error}. Using defaults.",
+                        path.display()
+                    ),
+                    true,
+                )),
+            ),
         }
-        AppSettings::default()
     }
 
     pub fn save(settings: &AppSettings) -> Result<String, String> {

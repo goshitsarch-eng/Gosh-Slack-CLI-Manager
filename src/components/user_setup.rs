@@ -218,8 +218,8 @@ impl Component for UserSetupComponent {
         let chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Length(4), // Title
-                Constraint::Min(10),   // Form
+                Constraint::Length(if area.height < 20 { 0 } else { 4 }), // Title
+                Constraint::Min(0), // Form; reserve space for validation feedback
                 Constraint::Length(3), // Status/Error
             ])
             .split(area);
@@ -232,7 +232,7 @@ impl Component for UserSetupComponent {
         let title = Paragraph::new(vec![
             Line::from(Span::styled("User Setup", Theme::title())),
             Line::from(Span::styled(
-                "Create accounts, assign groups, and optionally move to graphical login.",
+                "Create accounts and assign groups.",
                 Theme::subtitle(),
             )),
         ])
@@ -305,7 +305,7 @@ impl Component for UserSetupComponent {
         } else {
             Theme::input_inactive()
         };
-        let password_display = "*".repeat(self.password.len());
+        let password_display = "*".repeat(self.password.chars().count());
         let password_block = Block::default()
             .borders(Borders::ALL)
             .title("Password")
@@ -325,7 +325,7 @@ impl Component for UserSetupComponent {
         } else {
             Theme::input_inactive()
         };
-        let confirm_display = "*".repeat(self.confirm_password.len());
+        let confirm_display = "*".repeat(self.confirm_password.chars().count());
         let confirm_block = Block::default()
             .borders(Borders::ALL)
             .title("Confirm Password")
@@ -338,6 +338,33 @@ impl Component for UserSetupComponent {
             .style(confirm_style)
             .block(confirm_block);
         frame.render_widget(confirm, input_chunks[2]);
+
+        if input_inner.height < 9 {
+            frame.render_widget(ratatui::widgets::Clear, input_inner);
+            let values = [
+                format!("User: {}", self.username),
+                format!("Password: {}", "*".repeat(self.password.chars().count())),
+                format!(
+                    "Confirm: {}",
+                    "*".repeat(self.confirm_password.chars().count())
+                ),
+            ];
+            let lines: Vec<Line> = values
+                .into_iter()
+                .enumerate()
+                .map(|(index, value)| {
+                    Line::styled(
+                        value,
+                        if self.current_field == index {
+                            Theme::input_active()
+                        } else {
+                            Theme::input_inactive()
+                        },
+                    )
+                })
+                .collect();
+            frame.render_widget(Paragraph::new(lines), input_inner);
+        }
 
         // Middle - groups checkboxes
         let groups_block = Theme::panel(Theme::panel_title("Groups"));
@@ -383,7 +410,10 @@ impl Component for UserSetupComponent {
             Span::styled("Change runlevel 3→4 (GUI)", runlevel_style),
         ]));
 
-        let groups_para = Paragraph::new(lines);
+        let selected_line = self.current_field.saturating_sub(3)
+            + usize::from(self.current_field == 3 + self.groups.len());
+        let group_scroll = (selected_line + 1).saturating_sub(groups_inner.height as usize);
+        let groups_para = Paragraph::new(lines).scroll((group_scroll as u16, 0));
         frame.render_widget(groups_para, groups_inner);
 
         let current_group = if self.current_field >= 3 && self.current_field < 3 + self.groups.len()
@@ -463,6 +493,7 @@ impl Component for UserSetupComponent {
         ];
         frame.render_widget(
             Paragraph::new(inspector_lines)
+                .wrap(ratatui::widgets::Wrap { trim: true })
                 .block(Theme::panel_alt(Theme::panel_title("Inspector"))),
             form_chunks[2],
         );

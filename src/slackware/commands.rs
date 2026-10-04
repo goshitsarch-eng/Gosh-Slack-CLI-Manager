@@ -64,7 +64,7 @@ impl CommandExecutor {
                 return CommandResult {
                     success: false,
                     stdout: String::new(),
-                    stderr: error.to_string(),
+                    stderr: format!("Unable to start {cmd}: {error}"),
                 };
             }
         };
@@ -197,5 +197,22 @@ impl CommandExecutor {
 impl Default for CommandExecutor {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn missing_command_error_identifies_the_program() {
+        let result = CommandExecutor::new()
+            .execute("/nonexistent/slackware-cli-manager-test-command", &[])
+            .await;
+        assert!(!result.success);
+        assert!(result.stdout.is_empty());
+        assert!(result
+            .stderr
+            .contains("/nonexistent/slackware-cli-manager-test-command"));
     }
 }

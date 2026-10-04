@@ -732,7 +732,7 @@ impl Component for UpdaterComponent {
                 ),
             ]),
             Line::from(ratatui::text::Span::styled(
-                "Review the changelog, run the slackpkg cycle, then resolve bootloader and config fallout.",
+                "Review → update → bootloader → config",
                 Theme::subtitle(),
             )),
         ])
@@ -750,6 +750,7 @@ impl Component for UpdaterComponent {
         frame.render_widget(progress, middle[0]);
 
         let advisories = Paragraph::new(self.advisory_lines())
+            .wrap(ratatui::widgets::Wrap { trim: true })
             .style(Theme::subtitle())
             .block(Theme::panel_alt(Theme::panel_title("Maintenance notes")));
         frame.render_widget(advisories, middle[1]);

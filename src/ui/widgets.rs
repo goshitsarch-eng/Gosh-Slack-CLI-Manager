@@ -1,7 +1,7 @@
 use ratatui::{
     layout::Rect,
     text::{Line, Span},
-    widgets::{Block, Widget},
+    widgets::{Block, Paragraph, Widget, Wrap},
 };
 
 use super::theme::Theme;
@@ -111,6 +111,9 @@ impl<'a> StatusBar<'a> {
 
 impl Widget for StatusBar<'_> {
     fn render(self, area: Rect, buf: &mut ratatui::buffer::Buffer) {
+        if area.is_empty() {
+            return;
+        }
         for y in area.top()..area.bottom() {
             for x in area.left()..area.right() {
                 buf[(x, y)].set_style(Theme::status_bar());
@@ -134,7 +137,7 @@ impl Widget for StatusBar<'_> {
             spans.pop();
         }
 
-        if !self.message.is_empty() {
+        if self.keys.is_empty() && !self.message.is_empty() {
             if !spans.is_empty() {
                 spans.push(Span::styled("  //  ", Theme::muted()));
             }
@@ -142,6 +145,8 @@ impl Widget for StatusBar<'_> {
         }
 
         let line = Line::from(spans);
-        buf.set_line(area.x, area.y, &line, area.width);
+        Paragraph::new(line)
+            .wrap(Wrap { trim: true })
+            .render(area, buf);
     }
 }

@@ -37,7 +37,8 @@ Additional tabs:
 ## Requirements
 
 - Slackware Linux
-- Rust `1.70+` to build from source
+- Rust `1.88+` to build the current locked dependencies (current stable is recommended)
+- An interactive terminal at least 80 columns by 24 rows
 - root privileges only for mutating actions
 
 Supported Slackware versions are detected from `/etc/slackware-version`. The codebase currently targets common Slackware `14.x`, `15.0`, and `-current` layouts.
@@ -122,6 +123,12 @@ sudo slackware-cli-manager
 ```
 
 The header shows when the app is running in read-only mode. Actions that require privileges are blocked centrally and report the reason in the UI instead of failing later in a component.
+
+Use `Alt+Left` / `Alt+Right` to move between all tabs. `F5` refreshes several secondary views; use `Alt+Left` / `Alt+Right` to reach Search from those views. `Ctrl+Q` exits the application, except while editing a configuration file, where it closes the editor or warns about unsaved changes. In the editor, `Ctrl+S` saves and `Ctrl+X` discards changes; `Ctrl+C` exits the application.
+
+User preferences are saved to `$XDG_CONFIG_HOME/slackware-cli-manager/config.toml` when `XDG_CONFIG_HOME` is an absolute path, otherwise `~/.config/slackware-cli-manager/config.toml`; root preferences are saved to `/etc/slackware-cli-manager/config.toml`. In Settings, use `Tab` to change sections, arrows to select and change options, `s` to save, and `r` to reset the form to defaults.
+
+The development build and tests also run on other Linux distributions. On a non-Slackware host the UI warns that Slackware detection failed and uses its Current fallback. This does not provide Slackware package tools, service scripts, or system configuration. Verify administration workflows on a disposable Slackware system with the relevant tools installed.
 
 ## Behavior Notes
 

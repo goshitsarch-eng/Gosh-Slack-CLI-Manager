@@ -94,10 +94,6 @@ impl Theme {
         Style::default().fg(Self::SOFT_FG).bg(Self::SURFACE)
     }
 
-    pub fn tab_separator() -> Style {
-        Style::default().fg(Self::MUTED).bg(Self::SURFACE)
-    }
-
     pub fn success() -> Style {
         Style::default().fg(Self::SUCCESS).bg(Self::BG)
     }
@@ -196,10 +192,6 @@ impl Theme {
             .fg(Self::FG)
             .bg(Self::SURFACE_ELEVATED)
             .add_modifier(Modifier::BOLD)
-    }
-
-    pub fn divider() -> Style {
-        Style::default().fg(Self::BORDER).bg(Self::BG)
     }
 
     pub fn panel<'a>(title: Line<'a>) -> Block<'a> {
