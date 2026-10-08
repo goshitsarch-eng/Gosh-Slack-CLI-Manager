@@ -1,10 +1,12 @@
 package utils
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"time"
+	"unicode/utf8"
 )
 
 func tempPathFor(path string) (string, error) {
@@ -55,4 +57,20 @@ func AtomicWrite(path, contents string) error {
 		dir.Close()
 	}
 	return nil
+}
+
+// ErrInvalidUTF8 matches the error Rust's read_to_string reports.
+var ErrInvalidUTF8 = errors.New("stream did not contain valid UTF-8")
+
+// ReadFileString reads a whole file as UTF-8 text, failing on invalid UTF-8
+// like Rust's fs::read_to_string.
+func ReadFileString(path string) (string, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return "", err
+	}
+	if !utf8.Valid(data) {
+		return "", ErrInvalidUTF8
+	}
+	return string(data), nil
 }

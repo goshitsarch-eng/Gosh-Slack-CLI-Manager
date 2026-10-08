@@ -84,10 +84,10 @@ func DetectVersion() (Version, error) {
 		return Version{}, utils.VersionDetectionError(
 			"File /etc/slackware-version not found. Is this a Slackware system?")
 	}
-	content, err := os.ReadFile(versionFile)
+	content, err := utils.ReadFileString(versionFile)
 	if err != nil {
 		return Version{}, utils.VersionDetectionError(
 			fmt.Sprintf("Failed to read /etc/slackware-version: %s", utils.IOErrorString(err)))
 	}
-	return VersionFromString(string(content)), nil
+	return VersionFromString(content), nil
 }

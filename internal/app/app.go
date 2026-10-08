@@ -698,7 +698,7 @@ func (a *App) spawnServiceAction(action msg.ServiceAction) {
 			path := "/etc/rc.d/" + name
 			info, err := os.Stat(path)
 			if err != nil {
-				return "", utils.IOError(err)
+				return "", utils.PlainIOError(err)
 			}
 			mode := info.Mode().Perm()
 			if mode&0o111 != 0 {
@@ -707,7 +707,7 @@ func (a *App) spawnServiceAction(action msg.ServiceAction) {
 				mode |= 0o755
 			}
 			if err := os.Chmod(path, mode|(info.Mode()&(os.ModeSetuid|os.ModeSetgid|os.ModeSticky))); err != nil {
-				return "", utils.IOError(err)
+				return "", utils.PlainIOError(err)
 			}
 			return fmt.Sprintf("Toggled %s executable bit", name), nil
 		}, complete)

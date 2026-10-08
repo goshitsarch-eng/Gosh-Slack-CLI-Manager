@@ -63,6 +63,8 @@ func TestCompGoldenDump(t *testing.T) {
 			for i := range n {
 				c.newConfigFiles = append(c.newConfigFiles, fmt.Sprintf("/etc/dir%d/file%d.conf.new", i, i))
 			}
+		case "scan":
+			c.newConfigFiles = scanNewConfigFiles(arg, 12)
 		case "reset":
 			c.Reset()
 		case "dismiss":

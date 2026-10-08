@@ -34,8 +34,8 @@ func ConfigError(detail string) error {
 	return &AppError{msg: "Configuration error: " + detail}
 }
 
-// IOError wraps an OS error so it renders like a libc/strerror message with
-// its errno, e.g. "No such file or directory (os error 2)".
+// IOError wraps an OS error the way the original AppError::Io did:
+// "IO error: No such file or directory (os error 2)".
 func IOError(err error) error {
 	if err == nil {
 		return nil
@@ -44,7 +44,16 @@ func IOError(err error) error {
 	if errors.As(err, &appErr) {
 		return err
 	}
-	return &AppError{msg: IOErrorString(err)}
+	return &AppError{msg: "IO error: " + IOErrorString(err)}
+}
+
+// PlainIOError is an error whose text is IOErrorString(err), for places where
+// the original displayed a bare std::io::Error.
+func PlainIOError(err error) error {
+	if err == nil {
+		return nil
+	}
+	return errors.New(IOErrorString(err))
 }
 
 // IOErrorString formats err the way the original tool displayed I/O errors.

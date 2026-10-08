@@ -61,11 +61,11 @@ func ParseMirrors(versionFilter string) ([]MirrorEntry, error) {
 	if !exists(mirrorsPath) {
 		return nil, utils.FileOperationError("Mirrors file not found at /etc/slackpkg/mirrors")
 	}
-	content, err := os.ReadFile(mirrorsPath)
+	content, err := utils.ReadFileString(mirrorsPath)
 	if err != nil {
 		return nil, utils.IOError(err)
 	}
-	return ParseMirrorsFromContent(string(content), versionFilter), nil
+	return ParseMirrorsFromContent(content, versionFilter), nil
 }
 
 var regionRe = regexp.MustCompile(`mirrors\.(\w+)\.|\.(\w{2})/|/(\w{2})/`)
@@ -92,11 +92,11 @@ func SetActiveMirror(mirrorURL string) error {
 	if !exists(mirrorsPath) {
 		return utils.FileOperationError("Mirrors file not found")
 	}
-	content, err := os.ReadFile(mirrorsPath)
+	content, err := utils.ReadFileString(mirrorsPath)
 	if err != nil {
 		return utils.IOError(err)
 	}
-	newContent, err := RewriteMirrorsContent(string(content), mirrorURL)
+	newContent, err := RewriteMirrorsContent(content, mirrorURL)
 	if err != nil {
 		return err
 	}
@@ -118,11 +118,11 @@ func SetDefaultRunlevel(runlevel int) error {
 	if !exists(inittab) {
 		return utils.FileOperationError("/etc/inittab not found")
 	}
-	content, err := os.ReadFile(inittab)
+	content, err := utils.ReadFileString(inittab)
 	if err != nil {
 		return utils.IOError(err)
 	}
-	text := string(content)
+	text := content
 	if loc := initdefaultRe.FindStringIndex(text); loc != nil {
 		text = text[:loc[0]] + fmt.Sprintf("id:%d:initdefault:", runlevel) + text[loc[1]:]
 	}

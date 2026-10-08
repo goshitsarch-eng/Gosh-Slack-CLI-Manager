@@ -42,3 +42,23 @@ func TestIOErrorStringMatchesRustFormatting(t *testing.T) {
 		t.Fatalf("got %q", got)
 	}
 }
+
+func TestIOErrorMatchesAppErrorIoDisplay(t *testing.T) {
+	_, err := os.ReadFile("/nonexistent/slackware-cli-manager")
+	if got := IOError(err).Error(); got != "IO error: No such file or directory (os error 2)" {
+		t.Fatalf("got %q", got)
+	}
+	if got := PlainIOError(err).Error(); got != "No such file or directory (os error 2)" {
+		t.Fatalf("got %q", got)
+	}
+}
+
+func TestReadFileStringRejectsInvalidUTF8(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "bad")
+	if err := os.WriteFile(path, []byte{0xff, 0xfe}, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ReadFileString(path); IOErrorString(err) != "stream did not contain valid UTF-8" {
+		t.Fatalf("got %v", err)
+	}
+}
