@@ -79,11 +79,15 @@ func rustLines(s string) []string {
 		return nil
 	}
 	parts := strings.Split(s, "\n")
-	if parts[len(parts)-1] == "" {
-		parts = parts[:len(parts)-1]
+	last := len(parts) - 1
+	if parts[last] == "" {
+		parts = parts[:last]
 	}
-	for i, p := range parts {
-		parts[i] = strings.TrimSuffix(p, "\r")
+	for i := range parts {
+		// Only "\r\n" is a line ending; a final "\r" without "\n" stays.
+		if i < last {
+			parts[i] = strings.TrimSuffix(parts[i], "\r")
+		}
 	}
 	return parts
 }

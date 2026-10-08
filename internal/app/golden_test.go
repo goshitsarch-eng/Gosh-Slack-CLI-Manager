@@ -122,6 +122,9 @@ func goldenColor(c tui.Color) string {
 }
 
 func dumpBuffer(out *strings.Builder, name string, buf *tui.Buffer) {
+	// Mirror what a terminal backend receives: the cells hidden behind a
+	// wide character are never drawn, so they keep the blank default cell.
+	buf = hideWideTails(buf)
 	fmt.Fprintf(out, "=== %s\n", name)
 	for y := 0; y < buf.Area.Height; y++ {
 		for x := 0; x < buf.Area.Width; x++ {
@@ -151,4 +154,20 @@ func dumpBuffer(out *strings.Builder, name string, buf *tui.Buffer) {
 		}
 		fmt.Fprintf(out, "%d: %s\n", y, strings.Join(parts, " "))
 	}
+}
+
+func hideWideTails(src *tui.Buffer) *tui.Buffer {
+	buf := &tui.Buffer{Area: src.Area, Content: append([]tui.Cell(nil), src.Content...)}
+	for y := 0; y < buf.Area.Height; y++ {
+		for x := 0; x < buf.Area.Width; x++ {
+			w := tui.GraphemeWidth(buf.Cell(x, y).Symbol)
+			for i := 1; i < w && x+i < buf.Area.Width; i++ {
+				*buf.Cell(x+i, y) = tui.EmptyCell
+			}
+			if w > 1 {
+				x += w - 1
+			}
+		}
+	}
+	return buf
 }
