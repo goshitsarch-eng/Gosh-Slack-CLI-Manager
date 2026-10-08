@@ -91,8 +91,10 @@ func (b *Buffer) ResetAll() {
 func (b *Buffer) SetStyle(area Rect, style Style) {
 	area = b.Area.Intersection(area)
 	for y := area.Top(); y < area.Bottom(); y++ {
-		for x := area.Left(); x < area.Right(); x++ {
-			b.Cell(x, y).SetStyle(style)
+		start := (y-b.Area.Y)*b.Area.Width + (area.X - b.Area.X)
+		row := b.Content[start : start+area.Width]
+		for i := range row {
+			row[i].SetStyle(style)
 		}
 	}
 }
@@ -109,7 +111,10 @@ func (b *Buffer) SetStringN(x, y int, s string, maxWidth int, style Style) (int,
 		maxWidth = 1<<16 - 1
 	}
 	remaining := min(satSub(b.Area.Right(), x), maxWidth)
-	for _, g := range Graphemes(s) {
+	state := -1
+	for s != "" {
+		var g string
+		g, s, state = NextGrapheme(s, state)
 		if HasControl(g) {
 			continue
 		}

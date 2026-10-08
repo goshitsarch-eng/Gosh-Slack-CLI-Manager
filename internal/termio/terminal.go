@@ -6,6 +6,7 @@ package termio
 import (
 	"os"
 	"unicode"
+	"unicode/utf8"
 
 	"github.com/gdamore/tcell/v2"
 
@@ -16,6 +17,7 @@ import (
 type Terminal struct {
 	screen tcell.Screen
 	buf    *tui.Buffer
+	prev   *tui.Buffer
 	events chan Event
 }
 
@@ -43,7 +45,12 @@ func Open() (*Terminal, error) {
 	screen.HideCursor()
 	screen.Clear()
 
-	t := &Terminal{screen: screen, buf: tui.NewBuffer(tui.Rect{}), events: make(chan Event, 64)}
+	t := &Terminal{
+		screen: screen,
+		buf:    tui.NewBuffer(tui.Rect{}),
+		prev:   tui.NewBuffer(tui.Rect{}),
+		events: make(chan Event, 64),
+	}
 	go t.pump()
 	return t, nil
 }
@@ -75,13 +82,15 @@ func (t *Terminal) pump() {
 	}
 }
 
-// Draw renders one frame. Cells are pushed to tcell, which only writes the
-// ones that changed since the previous frame.
+// Draw renders one frame. Like ratatui's buffer diff, only cells that
+// changed since the previous frame are handed to tcell.
 func (t *Terminal) Draw(render func(f *tui.Frame)) {
 	w, h := t.screen.Size()
 	area := tui.Rect{Width: w, Height: h}
-	if area != t.buf.Area {
+	resized := area != t.buf.Area
+	if resized {
 		t.buf = tui.NewBuffer(area)
+		t.prev = tui.NewBuffer(area)
 		t.screen.Clear()
 	} else {
 		t.buf.ResetAll()
@@ -89,23 +98,26 @@ func (t *Terminal) Draw(render func(f *tui.Frame)) {
 
 	render(&tui.Frame{Buf: t.buf})
 
-	for y := 0; y < h; y++ {
-		for x := 0; x < w; x++ {
-			cell := t.buf.Cell(x, y)
-			if cell.Skip {
-				continue
-			}
-			runes := []rune(cell.Symbol)
-			mainc := ' '
-			var comb []rune
-			if len(runes) > 0 {
-				mainc, comb = runes[0], runes[1:]
-			}
-			t.screen.SetContent(x, y, mainc, comb, toTcellStyle(cell))
+	changed := resized
+	for i := range t.buf.Content {
+		cell := &t.buf.Content[i]
+		if cell.Skip || (!resized && *cell == t.prev.Content[i]) {
+			continue
 		}
+		mainc, size := utf8.DecodeRuneInString(cell.Symbol)
+		var comb []rune
+		if size == 0 {
+			mainc = ' '
+		} else if size < len(cell.Symbol) {
+			comb = []rune(cell.Symbol[size:])
+		}
+		t.screen.SetContent(i%w, i/w, mainc, comb, toTcellStyle(cell))
+		changed = true
 	}
-	t.screen.HideCursor()
-	t.screen.Show()
+	t.buf, t.prev = t.prev, t.buf
+	if changed {
+		t.screen.Show()
+	}
 }
 
 func toTcellColor(c tui.Color) tcell.Color {

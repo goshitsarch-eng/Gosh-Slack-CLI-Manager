@@ -34,9 +34,15 @@ type StyledGrapheme struct {
 
 // StyledGraphemes yields the span's graphemes patched over base.
 func (s Span) StyledGraphemes(base Style) []StyledGrapheme {
+	return s.appendStyledGraphemes(make([]StyledGrapheme, 0, len(s.Content)), base)
+}
+
+func (s Span) appendStyledGraphemes(out []StyledGrapheme, base Style) []StyledGrapheme {
 	style := base.Patch(s.Style)
-	var out []StyledGrapheme
-	for _, g := range Graphemes(s.Content) {
+	rest, state := s.Content, -1
+	for rest != "" {
+		var g string
+		g, rest, state = NextGrapheme(rest, state)
 		if g == "\n" {
 			continue
 		}
@@ -52,7 +58,15 @@ func (s Span) Render(area Rect, buf *Buffer) {
 		return
 	}
 	x, y := area.X, area.Y
-	for i, g := range s.StyledGraphemes(Style{}) {
+	style := Style{}.Patch(s.Style)
+	rest, state := s.Content, -1
+	for i := 0; rest != ""; {
+		var sym string
+		sym, rest, state = NextGrapheme(rest, state)
+		if sym == "\n" {
+			continue
+		}
+		g := StyledGrapheme{Symbol: sym, Style: style}
 		w := GraphemeWidth(g.Symbol)
 		next := x + w
 		if next > area.Right() {
@@ -72,6 +86,7 @@ func (s Span) Render(area Rect, buf *Buffer) {
 			buf.Cell(hx, y).Reset()
 		}
 		x = next
+		i++
 	}
 }
 
@@ -150,9 +165,13 @@ func (l Line) Width() int {
 // StyledGraphemes yields every grapheme of the line patched over base.
 func (l Line) StyledGraphemes(base Style) []StyledGrapheme {
 	style := base.Patch(l.Style)
-	var out []StyledGrapheme
+	n := 0
 	for _, s := range l.Spans {
-		out = append(out, s.StyledGraphemes(style)...)
+		n += len(s.Content)
+	}
+	out := make([]StyledGrapheme, 0, n)
+	for _, s := range l.Spans {
+		out = s.appendStyledGraphemes(out, style)
 	}
 	return out
 }

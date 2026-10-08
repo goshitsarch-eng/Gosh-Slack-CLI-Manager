@@ -143,16 +143,39 @@ func strWidthOverride(r rune) (int, bool) {
 
 // Graphemes splits s into extended grapheme clusters.
 func Graphemes(s string) []string {
-	var out []string
-	gr := uniseg.NewGraphemes(s)
-	for gr.Next() {
-		out = append(out, gr.Str())
+	out := make([]string, 0, len(s))
+	state := -1
+	for s != "" {
+		var g string
+		g, s, state = NextGrapheme(s, state)
+		out = append(out, g)
 	}
 	return out
 }
 
+// NextGrapheme returns the first extended grapheme cluster of s and the
+// remainder, without allocating. Pass -1 as the initial state. Runs of ASCII
+// take a fast path: between two ASCII characters there is always a cluster
+// boundary except inside "\r\n".
+func NextGrapheme(s string, state int) (g, rest string, newState int) {
+	if len(s) == 1 && s[0] < utf8.RuneSelf {
+		return s, "", -1
+	}
+	if len(s) > 1 && s[0] < utf8.RuneSelf && s[1] < utf8.RuneSelf {
+		if s[0] == '\r' && s[1] == '\n' {
+			return s[:2], s[2:], -1
+		}
+		return s[:1], s[1:], -1
+	}
+	g, rest, _, newState = uniseg.FirstGraphemeClusterInString(s, state)
+	return g, rest, newState
+}
+
 // HasControl reports whether s contains a control character.
 func HasControl(s string) bool {
+	if len(s) == 1 {
+		return s[0] < 0x20 || s[0] == 0x7f
+	}
 	for _, r := range s {
 		if unicode.IsControl(r) {
 			return true
