@@ -32,11 +32,10 @@ type strCtx struct {
 	c    rune
 }
 
-func label(s string) strCtx     { return strCtx{kind: ctxLabel, s: s} }
-func expChar(c rune) strCtx     { return strCtx{kind: ctxChar, c: c} }
-func expStr(s string) strCtx    { return strCtx{kind: ctxString, s: s} }
-func expDesc(s string) strCtx   { return strCtx{kind: ctxDesc, s: s} }
-func (c strCtx) String() string { return c.display() }
+func label(s string) strCtx   { return strCtx{kind: ctxLabel, s: s} }
+func expChar(c rune) strCtx   { return strCtx{kind: ctxChar, c: c} }
+func expStr(s string) strCtx  { return strCtx{kind: ctxString, s: s} }
+func expDesc(s string) strCtx { return strCtx{kind: ctxDesc, s: s} }
 
 func (c strCtx) display() string {
 	switch c.kind {
@@ -854,7 +853,7 @@ func (p *parser) mlLiteralBody() (string, *perr) {
 
 // --- numbers -----------------------------------------------------------------
 
-// digitRun parses first-digit then *( DIGIT / "_" DIGIT ) where the digit
+// digitTail parses *( DIGIT / "_" DIGIT ) after a leading digit; the digit
 // after an underscore is cut with ctx.
 func (p *parser) digitTail(isD func(byte) bool, afterUnderscore ...strCtx) *perr {
 	for {

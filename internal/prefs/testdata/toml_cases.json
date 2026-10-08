@@ -3483,6 +3483,422 @@
   {
    "doc": "theme.Dark = false # trailing\nrefresh_interval.x = \"\"\"a\"\"\"\"\r\n",
    "err": "TOML parse error at line 1, column 14\n  |\n1 | theme.Dark = false # trailing\n  |              ^^^^^\nexpected table, found boolean\n"
+  },
+  {
+   "doc": "a = [[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]",
+   "err": "TOML parse error at line 1, column 1\n  |\n1 | a = [[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]\n  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nmissing field `theme`\n"
+  },
+  {
+   "doc": "a = {b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b=1}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}",
+   "err": "TOML parse error at line 1, column 1\n  |\n1 | a = {b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b=1}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}\n  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nmissing field `theme`\n"
+  },
+  {
+   "doc": "k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k = 1",
+   "err": "TOML parse error at line 1, column 1\n  |\n1 | k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k = 1\n  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nmissing field `theme`\n"
+  },
+  {
+   "doc": "[k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k]",
+   "err": "TOML parse error at line 1, column 1\n  |\n1 | [k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k]\n  | ^\nmissing field `theme`\n"
+  },
+  {
+   "doc": "a = [[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]",
+   "err": "TOML parse error at line 1, column 1\n  |\n1 | a = [[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]\n  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nmissing field `theme`\n"
+  },
+  {
+   "doc": "a = {b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b=1}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}",
+   "err": "TOML parse error at line 1, column 1\n  |\n1 | a = {b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b=1}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}\n  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nmissing field `theme`\n"
+  },
+  {
+   "doc": "k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k = 1",
+   "err": "TOML parse error at line 1, column 1\n  |\n1 | k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k = 1\n  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nmissing field `theme`\n"
+  },
+  {
+   "doc": "[k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k]",
+   "err": "TOML parse error at line 1, column 1\n  |\n1 | [k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k]\n  | ^\nmissing field `theme`\n"
+  },
+  {
+   "doc": "a = [[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]",
+   "err": "TOML parse error at line 1, column 84\n  |\n1 | a = [[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]\n  |                                                                                    ^\nrecursion limit exceeded\n"
+  },
+  {
+   "doc": "a = {b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b=1}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}",
+   "err": "TOML parse error at line 1, column 242\n  |\n1 | a = {b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b=1}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}\n  |                                                                                                                                                                                                                                                  ^\nrecursion limit exceeded\n"
+  },
+  {
+   "doc": "k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k = 1",
+   "err": "TOML parse error at line 1, column 1\n  |\n1 | k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k = 1\n  | ^\nrecursion limit exceeded\n"
+  },
+  {
+   "doc": "[k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k]",
+   "err": "TOML parse error at line 1, column 2\n  |\n1 | [k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k]\n  |  ^\ninvalid table header\nrecursion limit exceeded\n"
+  },
+  {
+   "doc": "a = [[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]",
+   "err": "TOML parse error at line 1, column 84\n  |\n1 | a = [[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]\n  |                                                                                    ^\nrecursion limit exceeded\n"
+  },
+  {
+   "doc": "a = {b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b=1}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}",
+   "err": "TOML parse error at line 1, column 242\n  |\n1 | a = {b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b={b=1}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}\n  |                                                                                                                                                                                                                                                  ^\nrecursion limit exceeded\n"
+  },
+  {
+   "doc": "k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k = 1",
+   "err": "TOML parse error at line 1, column 1\n  |\n1 | k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k = 1\n  | ^\nrecursion limit exceeded\n"
+  },
+  {
+   "doc": "[k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k]",
+   "err": "TOML parse error at line 1, column 2\n  |\n1 | [k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k.k]\n  |  ^\ninvalid table header\nrecursion limit exceeded\n"
+  },
+  {
+   "doc": "confirm_actions = true\nshow_hidden_files = false\nauto_refresh = false\nrefresh_interval = 5\ndefault_tab = \"x\"\nlog_lines = 1\n[theme]\nDefault = {}",
+   "ok": [
+    0,
+    true,
+    false,
+    false,
+    5,
+    "x",
+    1
+   ]
+  },
+  {
+   "doc": "confirm_actions = true\nshow_hidden_files = false\nauto_refresh = false\nrefresh_interval = 5\ndefault_tab = \"x\"\nlog_lines = 1\n[theme]\nDark = []",
+   "ok": [
+    1,
+    true,
+    false,
+    false,
+    5,
+    "x",
+    1
+   ]
+  },
+  {
+   "doc": "confirm_actions = true\nshow_hidden_files = false\nauto_refresh = false\nrefresh_interval = 5\ndefault_tab = \"x\"\nlog_lines = 1\n[theme]\nDark = [1]",
+   "err": "TOML parse error at line 8, column 8\n  |\n8 | Dark = [1]\n  |        ^^^\nexpected empty table\n"
+  },
+  {
+   "doc": "confirm_actions = true\nshow_hidden_files = false\nauto_refresh = false\nrefresh_interval = 5\ndefault_tab = \"x\"\nlog_lines = 1\n[theme]\nNord = 1",
+   "err": "TOML parse error at line 8, column 8\n  |\n8 | Nord = 1\n  |        ^\nexpected table, found integer\n"
+  },
+  {
+   "doc": "confirm_actions = true\nshow_hidden_files = false\nauto_refresh = false\nrefresh_interval = 5\ndefault_tab = \"x\"\nlog_lines = 1\n[theme.Nord]",
+   "ok": [
+    4,
+    true,
+    false,
+    false,
+    5,
+    "x",
+    1
+   ]
+  },
+  {
+   "doc": "confirm_actions = true\nshow_hidden_files = false\nauto_refresh = false\nrefresh_interval = 5\ndefault_tab = \"x\"\nlog_lines = 1\n[theme.Nord]\nx=1",
+   "err": "TOML parse error at line 7, column 1\n  |\n7 | [theme.Nord]\n  | ^^^^^^^^^^^^\nexpected empty table\n"
+  },
+  {
+   "doc": "confirm_actions = true\nshow_hidden_files = false\nauto_refresh = false\nrefresh_interval = 5\ndefault_tab = \"x\"\nlog_lines = 1\n[[theme]]",
+   "err": "TOML parse error at line 7, column 1\n  |\n7 | [[theme]]\n  | ^^^^^^^^^\nwanted string or table\n"
+  },
+  {
+   "doc": "confirm_actions = true\nshow_hidden_files = false\nauto_refresh = false\nrefresh_interval = 5\ndefault_tab = \"x\"\nlog_lines = 1\n[[theme.Dark]]",
+   "err": "TOML parse error at line 7, column 1\n  |\n7 | [[theme.Dark]]\n  | ^^^^^^^^^^^^^^\nexpected empty array\n"
+  },
+  {
+   "doc": "confirm_actions = true\nshow_hidden_files = false\nauto_refresh = false\nrefresh_interval = 5\ndefault_tab = \"x\"\nlog_lines = 1\n[theme]\n[[theme.Dark]]",
+   "err": "TOML parse error at line 8, column 1\n  |\n8 | [[theme.Dark]]\n  | ^^^^^^^^^^^^^^\nexpected empty array\n"
+  },
+  {
+   "doc": "confirm_actions = true\nshow_hidden_files = false\nauto_refresh = false\nrefresh_interval = 5\ndefault_tab = \"x\"\nlog_lines = 1\n[theme]",
+   "err": "TOML parse error at line 7, column 1\n  |\n7 | [theme]\n  | ^^^^^^^\nwanted exactly 1 element, found 0 elements\n"
+  },
+  {
+   "doc": "confirm_actions = true\nshow_hidden_files = false\nauto_refresh = false\nrefresh_interval = 5\ndefault_tab = \"x\"\nlog_lines = 1\ntheme.Dark = {}",
+   "ok": [
+    1,
+    true,
+    false,
+    false,
+    5,
+    "x",
+    1
+   ]
+  },
+  {
+   "doc": "confirm_actions = true\nshow_hidden_files = false\nauto_refresh = false\nrefresh_interval = 5\ndefault_tab = \"x\"\nlog_lines = 1\ntheme.Dark.x = 1",
+   "err": "TOML parse error at line 7, column 1\n  |\n7 | theme.Dark.x = 1\n  | ^^^^^\nexpected empty table\n"
+  },
+  {
+   "doc": "confirm_actions = true\nshow_hidden_files = false\nauto_refresh = false\nrefresh_interval = 5\ndefault_tab = \"x\"\nlog_lines = 1\ntheme = { Dark = { } , }",
+   "err": "TOML parse error at line 7, column 22\n  |\n7 | theme = { Dark = { } , }\n  |                      ^\ninvalid inline table\nexpected `}`\n"
+  },
+  {
+   "doc": "confirm_actions = true\nshow_hidden_files = false\nauto_refresh = false\nrefresh_interval = 5\ndefault_tab = \"x\"\nlog_lines = 1\ntheme = 1979-05-27",
+   "err": "TOML parse error at line 7, column 9\n  |\n7 | theme = 1979-05-27\n  |         ^^^^^^^^^^\nwanted string or table\n"
+  },
+  {
+   "doc": "confirm_actions = true\nshow_hidden_files = false\nauto_refresh = false\nrefresh_interval = 5\ndefault_tab = \"x\"\nlog_lines = 1\n[theme]\nDark = {}\nNord = {}",
+   "err": "TOML parse error at line 7, column 1\n  |\n7 | [theme]\n  | ^^^^^^^\nwanted exactly 1 element, more than 1 element\n"
+  },
+  {
+   "doc": "confirm_actions = true\nshow_hidden_files = false\nauto_refresh = false\nrefresh_interval = 5\ndefault_tab = \"x\"\nlog_lines = 1\n\"theme\" = \"Dark\"",
+   "ok": [
+    1,
+    true,
+    false,
+    false,
+    5,
+    "x",
+    1
+   ]
+  },
+  {
+   "doc": "confirm_actions = true\nshow_hidden_files = false\nauto_refresh = false\nrefresh_interval = 5\ndefault_tab = \"x\"\nlog_lines = 1\n'theme' = 'Light'",
+   "ok": [
+    2,
+    true,
+    false,
+    false,
+    5,
+    "x",
+    1
+   ]
+  },
+  {
+   "doc": "confirm_actions = true\nshow_hidden_files = false\nauto_refresh = false\nrefresh_interval = 5\ndefault_tab = \"x\"\nlog_lines = 1\ntheme = \"\"\"Dark\"\"\"",
+   "ok": [
+    1,
+    true,
+    false,
+    false,
+    5,
+    "x",
+    1
+   ]
+  },
+  {
+   "doc": "confirm_actions = true\nshow_hidden_files = false\nauto_refresh = false\nrefresh_interval = 5\ndefault_tab = \"x\"\nlog_lines = 1\ntheme = '''\nDark'''",
+   "ok": [
+    1,
+    true,
+    false,
+    false,
+    5,
+    "x",
+    1
+   ]
+  },
+  {
+   "doc": "confirm_actions = true\nshow_hidden_files = false\nauto_refresh = false\nrefresh_interval = 5\ndefault_tab = \"x\"\nlog_lines = 1\ntheme = \"Dark\"\n[x]\ntheme = 1",
+   "ok": [
+    1,
+    true,
+    false,
+    false,
+    5,
+    "x",
+    1
+   ]
+  },
+  {
+   "doc": "confirm_actions = true\nshow_hidden_files = false\nauto_refresh = false\nrefresh_interval = 5\ndefault_tab = \"x\"\nlog_lines = 1\n[x]\n[theme]\nDracula={}\n[y]",
+   "ok": [
+    5,
+    true,
+    false,
+    false,
+    5,
+    "x",
+    1
+   ]
+  },
+  {
+   "doc": "confirm_actions = true\nshow_hidden_files = false\nauto_refresh = false\nrefresh_interval = 5\ndefault_tab = \"x\"\nlog_lines = 1\ntheme = { \"Bad\" = {} }",
+   "err": "TOML parse error at line 7, column 11\n  |\n7 | theme = { \"Bad\" = {} }\n  |           ^^^^^\nunknown variant `Bad`, expected one of `Default`, `Dark`, `Light`, `Solarized`, `Nord`, `Dracula`\n"
+  },
+  {
+   "doc": "confirm_actions = true\nshow_hidden_files = false\nauto_refresh = false\nrefresh_interval = 5\ndefault_tab = \"x\"\nlog_lines = 1\ntheme = { Dark.x = 1 }",
+   "err": "TOML parse error at line 7, column 9\n  |\n7 | theme = { Dark.x = 1 }\n  |         ^^^^^^^^^^^^^^\nexpected empty table\n"
+  },
+  {
+   "doc": "confirm_actions = true\nshow_hidden_files = false\nauto_refresh = false\nrefresh_interval = 5\ndefault_tab = \"x\"\nlog_lines = 1\ntheme = [ ]",
+   "err": "TOML parse error at line 7, column 9\n  |\n7 | theme = [ ]\n  |         ^^^\nwanted string or table\n"
+  },
+  {
+   "doc": "confirm_actions = true\nshow_hidden_files = false\nauto_refresh = false\nrefresh_interval = 5\ndefault_tab = \"x\"\nlog_lines = 1\ntheme = inf",
+   "err": "TOML parse error at line 7, column 9\n  |\n7 | theme = inf\n  |         ^^^\nwanted string or table\n"
+  },
+  {
+   "doc": "confirm_actions = true\nshow_hidden_files = false\nauto_refresh = false\nrefresh_interval = 5\ndefault_tab = \"x\"\nlog_lines = 1\ntheme = { Light = [], }",
+   "err": "TOML parse error at line 7, column 21\n  |\n7 | theme = { Light = [], }\n  |                     ^\ninvalid inline table\nexpected `}`\n"
+  },
+  {
+   "doc": "theme = \"Dark\"\nconfirm_actions = true\nshow_hidden_files = false\nauto_refresh = false\nrefresh_interval = 5\ndefault_tab = \"x\"\nlog_lines = 9223372036854775807\n",
+   "ok": [
+    1,
+    true,
+    false,
+    false,
+    5,
+    "x",
+    9223372036854775807
+   ]
+  },
+  {
+   "doc": "theme = \"Dark\"\nconfirm_actions = true\nshow_hidden_files = false\nauto_refresh = false\nrefresh_interval = 5\ndefault_tab = \"x\"\nlog_lines = 0x7FFFFFFFFFFFFFFF\n",
+   "ok": [
+    1,
+    true,
+    false,
+    false,
+    5,
+    "x",
+    9223372036854775807
+   ]
+  },
+  {
+   "doc": "theme = \"Dark\"\nconfirm_actions = true\nshow_hidden_files = false\nauto_refresh = false\nrefresh_interval = 5\ndefault_tab = \"x\"\nlog_lines = -0\n",
+   "ok": [
+    1,
+    true,
+    false,
+    false,
+    5,
+    "x",
+    0
+   ]
+  },
+  {
+   "doc": "theme = \"Dark\"\nconfirm_actions = true\nshow_hidden_files = false\nauto_refresh = false\nrefresh_interval = 5\ndefault_tab = \"x\"\nlog_lines = +1\n",
+   "ok": [
+    1,
+    true,
+    false,
+    false,
+    5,
+    "x",
+    1
+   ]
+  },
+  {
+   "doc": "theme = \"Dark\"\nconfirm_actions = true\nshow_hidden_files = false\nauto_refresh = false\nrefresh_interval = 5\ndefault_tab = \"x\"\nlog_lines = 1979-05-27T00:00:00\n",
+   "err": "TOML parse error at line 7, column 13\n  |\n7 | log_lines = 1979-05-27T00:00:00\n  |             ^^^^^^^^^^^^^^^^^^^\ninvalid type: map, expected usize\n"
+  },
+  {
+   "doc": "theme = \"Dark\"\nconfirm_actions = true\nshow_hidden_files = false\nauto_refresh = false\nrefresh_interval = 5\ndefault_tab = \"x\"\nlog_lines = [1]\n",
+   "err": "TOML parse error at line 7, column 13\n  |\n7 | log_lines = [1]\n  |             ^^^\ninvalid type: sequence, expected usize\n"
+  },
+  {
+   "doc": "theme = \"Dark\"\nconfirm_actions = true\nshow_hidden_files = false\nauto_refresh = false\nrefresh_interval = 5\ndefault_tab = \"x\"\nlog_lines = {}\n",
+   "err": "TOML parse error at line 7, column 13\n  |\n7 | log_lines = {}\n  |             ^^\ninvalid type: map, expected usize\n"
+  },
+  {
+   "doc": "theme = \"Dark\"\nconfirm_actions = true\nshow_hidden_files = false\nauto_refresh = false\nrefresh_interval = 5\ndefault_tab = \"x\"\n[log_lines]\n",
+   "err": "TOML parse error at line 7, column 1\n  |\n7 | [log_lines]\n  | ^^^^^^^^^^^\ninvalid type: map, expected usize\n"
+  },
+  {
+   "doc": "theme = \"Dark\"\nconfirm_actions = true\nshow_hidden_files = false\nauto_refresh = false\nrefresh_interval = 5\ndefault_tab = \"x\"\n[[log_lines]]\n",
+   "err": "TOML parse error at line 7, column 1\n  |\n7 | [[log_lines]]\n  | ^^^^^^^^^^^^^\ninvalid type: sequence, expected usize\n"
+  },
+  {
+   "doc": "theme = \"Dark\"\nconfirm_actions = true\nshow_hidden_files = false\nauto_refresh = false\nrefresh_interval = 5\ndefault_tab = \"x\"\nlog_lines.a = 1\n",
+   "err": "TOML parse error at line 7, column 1\n  |\n7 | log_lines.a = 1\n  | ^^^^^^^^^\ninvalid type: map, expected usize\n"
+  },
+  {
+   "doc": "theme = \"Dark\"\nconfirm_actions = true\nshow_hidden_files = false\nauto_refresh = false\nrefresh_interval = 5\ndefault_tab = \"x\"\nlog_lines = nan\n",
+   "err": "TOML parse error at line 7, column 13\n  |\n7 | log_lines = nan\n  |             ^^^\ninvalid type: floating point `NaN`, expected usize\n"
+  },
+  {
+   "doc": "theme = \"Dark\"\nconfirm_actions = true\nshow_hidden_files = false\nauto_refresh = false\nrefresh_interval = 5\ndefault_tab = \"x\"\nlog_lines = -nan\n",
+   "err": "TOML parse error at line 7, column 13\n  |\n7 | log_lines = -nan\n  |             ^^^^\ninvalid type: floating point `NaN`, expected usize\n"
+  },
+  {
+   "doc": "theme = \"Dark\"\nconfirm_actions = true\nshow_hidden_files = false\nauto_refresh = false\nrefresh_interval = 5\ndefault_tab = \"x\"\nlog_lines = -inf\n",
+   "err": "TOML parse error at line 7, column 13\n  |\n7 | log_lines = -inf\n  |             ^^^^\ninvalid type: floating point `-inf`, expected usize\n"
+  },
+  {
+   "doc": "theme = \"Dark\"\nconfirm_actions = true\nshow_hidden_files = false\nauto_refresh = false\nrefresh_interval = 5\ndefault_tab = \"x\"\nlog_lines = 5e-324\n",
+   "err": "TOML parse error at line 7, column 13\n  |\n7 | log_lines = 5e-324\n  |             ^^^^^^\ninvalid type: floating point `0.000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000005`, expected usize\n"
+  },
+  {
+   "doc": "theme = \"Dark\"\nconfirm_actions = true\nshow_hidden_files = false\nauto_refresh = false\nrefresh_interval = 5\ndefault_tab = \"x\"\nlog_lines = 1e-400\n",
+   "err": "TOML parse error at line 7, column 13\n  |\n7 | log_lines = 1e-400\n  |             ^^^^^^\ninvalid type: floating point `0.0`, expected usize\n"
+  },
+  {
+   "doc": "theme = \"Dark\"\nconfirm_actions = true\nshow_hidden_files = false\nauto_refresh = false\nrefresh_interval = 5\ndefault_tab = \"x\"\nlog_lines = -0.0\n",
+   "err": "TOML parse error at line 7, column 13\n  |\n7 | log_lines = -0.0\n  |             ^^^^\ninvalid type: floating point `-0.0`, expected usize\n"
+  },
+  {
+   "doc": "theme = \"Dark\"\nconfirm_actions = true\nshow_hidden_files = false\nauto_refresh = false\nrefresh_interval = 5\ndefault_tab = \"x\"\nlog_lines = 123456789012345678901234567890.0\n",
+   "err": "TOML parse error at line 7, column 13\n  |\n7 | log_lines = 123456789012345678901234567890.0\n  |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\ninvalid type: floating point `123456789012345680000000000000.0`, expected usize\n"
+  },
+  {
+   "doc": "theme = \"Dark\"\nconfirm_actions = true\nshow_hidden_files = false\nauto_refresh = false\nrefresh_interval = 5\ndefault_tab = 1\nlog_lines = 1\n",
+   "err": "TOML parse error at line 6, column 15\n  |\n6 | default_tab = 1\n  |               ^\ninvalid type: integer `1`, expected a string\n"
+  },
+  {
+   "doc": "theme = \"Dark\"\nconfirm_actions = true\nshow_hidden_files = false\nauto_refresh = false\nrefresh_interval = 5\ndefault_tab = \"\\u0000\\u001f\\u007f\\u00ad\\u0301x\\u2028\\uE000\\U0010FFFF\"\nlog_lines = 1\n",
+   "ok": [
+    1,
+    true,
+    false,
+    false,
+    5,
+    "\u0000\u001f\u007f\u00ad\u0301x\u2028\ue000\udbff\udfff",
+    1
+   ]
+  },
+  {
+   "doc": "theme = \"Dark\"\nconfirm_actions = true\nshow_hidden_files = false\nauto_refresh = false\nrefresh_interval = 5\ndefault_tab = 'a\\b'\nlog_lines = 1\n",
+   "ok": [
+    1,
+    true,
+    false,
+    false,
+    5,
+    "a\\b",
+    1
+   ]
+  },
+  {
+   "doc": "theme = \"Dark\"\nconfirm_actions = true\nshow_hidden_files = false\nauto_refresh = false\nrefresh_interval = 5\ndefault_tab = true\nlog_lines = 1\n",
+   "err": "TOML parse error at line 6, column 15\n  |\n6 | default_tab = true\n  |               ^^^^\ninvalid type: boolean `true`, expected a string\n"
+  },
+  {
+   "doc": "theme = \"Dark\"\nconfirm_actions = true\nshow_hidden_files = false\nauto_refresh = false\nrefresh_interval = 5\ndefault_tab = 1.0\nlog_lines = 1\n",
+   "err": "TOML parse error at line 6, column 15\n  |\n6 | default_tab = 1.0\n  |               ^^^\ninvalid type: floating point `1.0`, expected a string\n"
+  },
+  {
+   "doc": "theme = \"Dark\"\nconfirm_actions = true\nshow_hidden_files = false\nauto_refresh = false\nrefresh_interval = 5\ndefault_tab = 2e10\nlog_lines = 1\n",
+   "err": "TOML parse error at line 6, column 15\n  |\n6 | default_tab = 2e10\n  |               ^^^^\ninvalid type: floating point `20000000000.0`, expected a string\n"
+  },
+  {
+   "doc": "theme = \"Dark\"\nconfirm_actions = true\nshow_hidden_files = false\nauto_refresh = false\nrefresh_interval = 5\ndefault_tab = 0.000001\nlog_lines = 1\n",
+   "err": "TOML parse error at line 6, column 15\n  |\n6 | default_tab = 0.000001\n  |               ^^^^^^^^\ninvalid type: floating point `0.000001`, expected a string\n"
+  },
+  {
+   "doc": "theme = \"Dark\"\nconfirm_actions = true\nshow_hidden_files = false\nauto_refresh = false\nrefresh_interval = 4294967295\ndefault_tab = \"x\"\nlog_lines = 1\n",
+   "ok": [
+    1,
+    true,
+    false,
+    false,
+    4294967295,
+    "x",
+    1
+   ]
+  },
+  {
+   "doc": "theme = \"Dark\"\nconfirm_actions = true\nshow_hidden_files = false\nauto_refresh = false\nrefresh_interval = 4294967296\ndefault_tab = \"x\"\nlog_lines = 1\n",
+   "err": "TOML parse error at line 5, column 20\n  |\n5 | refresh_interval = 4294967296\n  |                    ^^^^^^^^^^\ninvalid value: integer `4294967296`, expected u32\n"
+  },
+  {
+   "doc": "theme = \"Dark\"\nconfirm_actions = true\nshow_hidden_files = false\nauto_refresh = false\nrefresh_interval = \"5\"\ndefault_tab = \"x\"\nlog_lines = 1\n",
+   "err": "TOML parse error at line 5, column 20\n  |\n5 | refresh_interval = \"5\"\n  |                    ^^^\ninvalid type: string \"5\", expected u32\n"
+  },
+  {
+   "doc": "theme = \"Dark\"\nconfirm_actions = true\nshow_hidden_files = false\nauto_refresh = false\nrefresh_interval = false\ndefault_tab = \"x\"\nlog_lines = 1\n",
+   "err": "TOML parse error at line 5, column 20\n  |\n5 | refresh_interval = false\n  |                    ^^^^^\ninvalid type: boolean `false`, expected u32\n"
   }
  ],
  "encode": [

@@ -225,10 +225,7 @@ func Save(s AppSettings) (string, error) {
 func parentPath(path string) (string, bool) {
 	trimmed := strings.TrimRight(path, "/")
 	if trimmed == "" {
-		if path == "" {
-			return "", false
-		}
-		return "", false // "/" has no parent
+		return "", false // "" and "/" have no parent
 	}
 	idx := strings.LastIndex(trimmed, "/")
 	if idx < 0 {
