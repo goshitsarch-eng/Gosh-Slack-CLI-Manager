@@ -4,9 +4,7 @@ package configeditor
 
 import (
 	"errors"
-	"os"
 	"strings"
-	"unicode/utf8"
 
 	"github.com/goshitsarch-eng/Gosh-Slack-CLI-Manager/internal/msg"
 	"github.com/goshitsarch-eng/Gosh-Slack-CLI-Manager/internal/tui"
@@ -74,15 +72,12 @@ func (c *Component) selectedFileIndex() (int, bool) {
 
 // LoadFile opens path in the editor.
 func (c *Component) LoadFile(path string) error {
-	data, err := os.ReadFile(path)
-	if err == nil && !utf8.Valid(data) {
-		err = errors.New("stream did not contain valid UTF-8")
-	}
+	content, err := utils.ReadFileString(path)
 	if err != nil {
 		return errors.New("Unable to open " + path + ": " + utils.IOErrorString(err))
 	}
 
-	c.textarea = tui.NewTextArea(tui.RustLines(string(data)))
+	c.textarea = tui.NewTextArea(tui.RustLines(content))
 	c.textarea.SetBlock(tui.NewBlock().
 		Borders(tui.BordersAll).
 		TitleStr("Editing: " + path).
