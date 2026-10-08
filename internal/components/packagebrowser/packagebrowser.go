@@ -162,10 +162,7 @@ func extractDescription(content string) string {
 
 	out := description.String()
 	if len(out) > 200 {
-		if !utf8.RuneStart(out[200]) {
-			panic("assertion failed: self.is_char_boundary(new_len)")
-		}
-		out = out[:200] + "..."
+		out = out[:charBoundary(out, 200)] + "..."
 	}
 	return out
 }
@@ -461,10 +458,7 @@ func (c *Component) renderList(f *tui.Frame, area tui.Rect) {
 		pkg := c.packages[idx]
 		desc := pkg.description
 		if len(desc) > 70 {
-			if !utf8.RuneStart(desc[67]) {
-				panic(fmt.Sprintf("byte index 67 is not a char boundary in `%s`", desc))
-			}
-			desc = desc[:67] + "..."
+			desc = desc[:charBoundary(desc, 67)] + "..."
 		}
 		items = append(items, tui.ListItemLines(
 			tui.LineFrom(
@@ -506,16 +500,11 @@ func (c *Component) renderDetails(f *tui.Frame, area tui.Rect, pkg *installedPac
 		tui.LineStr(""),
 	}
 
-	// Wrap description text in chunks of `inner.width - 2` chars. The
-	// original computes this with usize arithmetic: a width below 2 wraps
-	// around to a huge chunk size (release build) and a width of exactly 2
-	// panics on a zero chunk size.
+	// Wrap description text in chunks of `inner.width - 2` chars. Panels too
+	// narrow for that (which the original crashed on) don't wrap at all.
 	chunk := inner.Width - 2
-	if chunk == 0 {
-		panic("chunk size must be non-zero")
-	}
 	desc := []rune(pkg.description)
-	if chunk < 0 {
+	if chunk <= 0 {
 		chunk = len(desc) + 1
 	}
 	for start := 0; start < len(desc); start += chunk {
@@ -524,4 +513,13 @@ func (c *Component) renderDetails(f *tui.Frame, area tui.Rect, pkg *installedPac
 	}
 
 	f.RenderWidget(tui.ParagraphLines(lines...).Wrap(true), inner)
+}
+
+// charBoundary returns the largest index <= n that starts a UTF-8 character,
+// so truncation never splits a multibyte character (the original panicked).
+func charBoundary(s string, n int) int {
+	for n > 0 && n < len(s) && !utf8.RuneStart(s[n]) {
+		n--
+	}
+	return n
 }

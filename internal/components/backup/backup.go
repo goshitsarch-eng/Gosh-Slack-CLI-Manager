@@ -15,6 +15,7 @@ import (
 	"github.com/goshitsarch-eng/Gosh-Slack-CLI-Manager/internal/msg"
 	"github.com/goshitsarch-eng/Gosh-Slack-CLI-Manager/internal/tui"
 	"github.com/goshitsarch-eng/Gosh-Slack-CLI-Manager/internal/ui"
+	"github.com/goshitsarch-eng/Gosh-Slack-CLI-Manager/internal/utils"
 )
 
 const backupDir = "/var/backups/slackware-cli-manager"
@@ -189,7 +190,7 @@ type stringError string
 
 func (e stringError) Error() string { return string(e) }
 
-func ioErr(err error) error { return stringError(ioErrorString(err)) }
+func ioErr(err error) error { return utils.PlainIOError(err) }
 
 func createBackup(files []ConfigFile) (string, error) {
 	if err := ensureBackupDir(); err != nil {

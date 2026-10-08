@@ -9,11 +9,7 @@ import (
 	"syscall"
 	"time"
 	"unicode"
-
-	"github.com/goshitsarch-eng/Gosh-Slack-CLI-Manager/internal/utils"
 )
-
-func ioErrorString(err error) string { return utils.IOErrorString(err) }
 
 // trimStartMatches removes every leading repetition of prefix, like Rust's
 // str::trim_start_matches.

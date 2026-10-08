@@ -12,7 +12,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"unicode/utf8"
 
 	"github.com/goshitsarch-eng/Gosh-Slack-CLI-Manager/internal/msg"
 	"github.com/goshitsarch-eng/Gosh-Slack-CLI-Manager/internal/tui"
@@ -164,14 +163,11 @@ func (c *Component) scanKernels() {
 // readToString mirrors fs::read_to_string, including its error for files
 // that are not valid UTF-8.
 func readToString(path string) (string, error) {
-	data, err := os.ReadFile(path)
+	content, err := utils.ReadFileString(path)
 	if err != nil {
-		return "", errors.New(utils.IOErrorString(err))
+		return "", utils.PlainIOError(err)
 	}
-	if !utf8.Valid(data) {
-		return "", errors.New("stream did not contain valid UTF-8")
-	}
-	return string(data), nil
+	return content, nil
 }
 
 // strLines mirrors Rust's str::lines: split on '\n', removing a "\r" only
