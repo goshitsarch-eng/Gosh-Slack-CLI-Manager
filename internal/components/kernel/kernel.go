@@ -241,6 +241,12 @@ func BuildLiloDefaultConfig(version string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	return liloWithDefault(content, version)
+}
+
+// liloWithDefault rewrites lilo.conf content so the image matching version
+// becomes the default entry.
+func liloWithDefault(content, version string) (string, error) {
 	foundLabel := ""
 
 	currentImage := ""
