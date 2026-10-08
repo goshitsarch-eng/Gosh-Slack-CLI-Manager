@@ -87,6 +87,8 @@ func newTestBuf(w, h int) *Buffer {
 	return buf
 }
 
+var dumpEscaper = strings.NewReplacer(`\`, `\\`, "\r", `\r`, "\n", `\n`, "\t", `\t`)
+
 type caseSink struct {
 	names []string
 	dumps map[string]string
@@ -101,7 +103,7 @@ func (s *caseSink) dump(name string, buf *Buffer) {
 			if x > a.Left() {
 				sb.WriteByte('\t')
 			}
-			fmt.Fprintf(&sb, "%s|%s|%s|%d", c.Symbol, dumpColor(c.Fg), dumpColor(c.Bg), c.Modifier)
+			fmt.Fprintf(&sb, "%s|%s|%s|%d", dumpEscaper.Replace(c.Symbol), dumpColor(c.Fg), dumpColor(c.Bg), c.Modifier)
 		}
 		sb.WriteByte('\n')
 	}
@@ -548,6 +550,50 @@ func gaugeCases(s *caseSink) {
 	}
 }
 
+// ---------- unicode / control characters ----------
+
+func uniStrs() []string {
+	return []string{
+		"tab\there\tx",
+		"ctl\u0007bell\u001besc",
+		"fam \U0001f468\u200d\U0001f469\u200d\U0001f467 flag \U0001f1fa\U0001f1f8 ok",
+		"key 1\ufe0f\u20e3 #\ufe0f\u20e3 \u25b6\ufe0f \u26a0\ufe0f \u2764\ufe0f",
+		"thumbs \U0001f44d\U0001f3fd done",
+		"e\u0301cole cafe\u0301",
+		"\u0939\u093f\u0928\u094d\u0926\u0940 \u0915\u093e \u092a\u093e\u0920",
+		"\ud55c\uae00 \ud14d\uc2a4\ud2b8 \u1100\u1161\u11a8",
+		"ls\u2028sep",
+		"cr\r\nlf",
+		"\u2191\u2193 \u2190\u2192 \u2714 \u2713 \u2026",
+	}
+}
+
+func uniCases(s *caseSink) {
+	for i, str := range uniStrs() {
+		for _, w := range []int{3, 6, 10, 16, 40} {
+			for m := 0; m < 3; m++ {
+				buf := newTestBuf(w, 6)
+				applyWrap(ParagraphLine(LineSpan(Styled(str, tStyleAccent()))), m).Render(NewRect(1, 1, w, 6), buf)
+				s.dump(fmt.Sprintf("uni/para/%d/%s/%d", i, wrapNames[m], w), buf)
+			}
+			buf := newTestBuf(w, 3)
+			BorderedBlock().Title(LineSpan(Raw(str))).Render(NewRect(1, 1, w, 3), buf)
+			s.dump(fmt.Sprintf("uni/title/%d/%d", i, w), buf)
+
+			buf = newTestBuf(w, 2)
+			state := NewListState().WithSelected(0)
+			NewList([]ListItem{ListItemLine(LineSpan(Raw(str))), ListItemLine(LineSpan(Raw(str)).WithAlignment(AlignRight))}).
+				HighlightSymbol("\u25b6 ").
+				RenderStateful(NewRect(1, 1, w, 2), buf, &state)
+			s.dump(fmt.Sprintf("uni/list/%d/%d", i, w), buf)
+
+			buf = newTestBuf(w, 1)
+			NewGauge().Percent(40).Label(Raw(str)).Render(NewRect(1, 1, w, 1), buf)
+			s.dump(fmt.Sprintf("uni/gauge/%d/%d", i, w), buf)
+		}
+	}
+}
+
 // ---------- comparison ----------
 
 func loadExpected(t *testing.T) ([]string, map[string]string) {
@@ -634,6 +680,19 @@ func renderSymbols(dump string) string {
 	return sb.String()
 }
 
+// knownDivergence lists cases that differ for reasons outside the widgets:
+// uniStrs()[6] is Devanagari text whose virama conjuncts form a single
+// grapheme under Unicode 15.1 rule GB9c (unicode-segmentation 1.12) but are
+// split by uniseg 0.4.7 (Unicode 15.0).
+func knownDivergence(name string) bool {
+	for _, kind := range []string{"para", "title", "list", "gauge"} {
+		if strings.HasPrefix(name, "uni/"+kind+"/6/") {
+			return true
+		}
+	}
+	return false
+}
+
 func TestWidgetsMatchRatatui(t *testing.T) {
 	wantNames, want := loadExpected(t)
 	s := &caseSink{dumps: map[string]string{}}
@@ -642,12 +701,17 @@ func TestWidgetsMatchRatatui(t *testing.T) {
 	paragraphCases(s)
 	listCases(s)
 	gaugeCases(s)
+	uniCases(s)
 
 	if len(wantNames) != len(s.names) {
 		t.Errorf("case count: want %d got %d", len(wantNames), len(s.names))
 	}
-	failures := 0
+	failures, skipped := 0, 0
 	for i, name := range wantNames {
+		if knownDivergence(name) {
+			skipped++
+			continue
+		}
 		got, ok := s.dumps[name]
 		if !ok {
 			gotName := "<none>"
@@ -665,5 +729,5 @@ func TestWidgetsMatchRatatui(t *testing.T) {
 			t.Fatalf("too many failures")
 		}
 	}
-	t.Logf("compared %d cases", len(wantNames))
+	t.Logf("compared %d cases (%d skipped as known divergences)", len(wantNames)-skipped, skipped)
 }

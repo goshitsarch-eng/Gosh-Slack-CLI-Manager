@@ -226,13 +226,19 @@ func renderSpans(spans []Span, area Rect, buf *Buffer, skip int) {
 	}
 }
 
-// truncateStart keeps the trailing graphemes of s that fit within width.
+// truncateStart keeps the trailing graphemes of s that fit within width
+// (unicode-truncate's unicode_truncate_start). That crate measures with
+// unicode-width 0.1, which differs from 0.2 only in giving '\n' (and so
+// "\r\n") zero width.
 func truncateStart(s string, width int) (string, int) {
 	gs := Graphemes(s)
 	used := 0
 	i := len(gs)
 	for i > 0 {
 		w := GraphemeWidth(gs[i-1])
+		if gs[i-1] == "\n" || gs[i-1] == "\r\n" {
+			w = 0
+		}
 		if used+w > width {
 			break
 		}
