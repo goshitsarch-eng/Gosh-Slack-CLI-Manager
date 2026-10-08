@@ -1,1 +1,3 @@
-/target/
+/build/
+/slackware-cli-manager
+/dist/

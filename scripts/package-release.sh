@@ -11,7 +11,7 @@ BINARY_PATH="$1"
 RAW_VERSION="$2"
 OUTPUT_DIR="$3"
 VERSION="${RAW_VERSION#v}"
-TARGET_TRIPLE="x86_64-unknown-linux-musl"
+TARGET_TRIPLE="x86_64-linux"
 PORTABLE_BASENAME="${APP_NAME}-${RAW_VERSION}-${TARGET_TRIPLE}"
 SLACKWARE_PKGNAME="${APP_NAME}-${VERSION}-x86_64-1"
 
@@ -72,7 +72,7 @@ slackware-cli-manager: package inspection, services, logs, networking, backups,
 slackware-cli-manager: disks, cron inspection, kernel management, and config edits.
 slackware-cli-manager:
 slackware-cli-manager: The release package ships a prebuilt static binary so users
-slackware-cli-manager: do not need Rust or crates.io just to install the tool.
+slackware-cli-manager: do not need a Go toolchain just to install the tool.
 slackware-cli-manager:
 slackware-cli-manager: Homepage: https://github.com/goshitsarch-eng/Gosh-Slack-CLI-Manager
 EOF
