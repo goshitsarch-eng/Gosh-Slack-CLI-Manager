@@ -25,20 +25,19 @@ jobs:
         with:
           ref: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref }}
 
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Cache build artifacts
-        uses: Swatinem/rust-cache@v2
+      - name: Install Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
 
       - name: Check formatting
-        run: cargo fmt --check
+        run: test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }
 
-      - name: Run Clippy
-        run: cargo clippy --all-targets --all-features -- -D warnings
+      - name: Vet
+        run: go vet ./...
 
       - name: Run tests
-        run: cargo test --all-targets --all-features
+        run: go test ./...
 
   build-and-release:
     needs: verify
@@ -70,24 +69,29 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y musl-tools xz-utils
+          sudo apt-get install -y xz-utils
 
-      - name: Install Rust with musl target
-        uses: dtolnay/rust-toolchain@stable
+      - name: Install Go
+        uses: actions/setup-go@v5
         with:
-          targets: x86_64-unknown-linux-musl
-
-      - name: Cache build artifacts
-        uses: Swatinem/rust-cache@v2
+          go-version-file: go.mod
 
       - name: Build release binary
-        run: cargo build --release --locked --target x86_64-unknown-linux-musl
+        env:
+          CGO_ENABLED: "0"
+          GOOS: linux
+          GOARCH: amd64
+        run: |
+          go build -trimpath \
+            -ldflags "-s -w -X main.version=${{ steps.meta.outputs.version }}" \
+            -o build/slackware-cli-manager \
+            ./cmd/slackware-cli-manager
 
       - name: Package release assets
         run: |
           chmod +x scripts/package-release.sh
           scripts/package-release.sh \
-            target/x86_64-unknown-linux-musl/release/slackware-cli-manager \
+            build/slackware-cli-manager \
             "${{ steps.meta.outputs.tag }}" \
             dist
 

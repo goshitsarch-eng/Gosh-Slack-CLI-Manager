@@ -37,7 +37,7 @@ Additional tabs:
 ## Requirements
 
 - Slackware Linux
-- Rust `1.88+` to build the current locked dependencies (current stable is recommended)
+- Go `1.24+` only if you build from source
 - An interactive terminal at least 80 columns by 24 rows
 - root privileges only for mutating actions
 
@@ -47,12 +47,12 @@ Supported Slackware versions are detected from `/etc/slackware-version`. The cod
 
 ### Prebuilt release assets
 
-Slackware users do not need Rust, `cargo`, or crates.io.
+Slackware users do not need a Go toolchain.
 
 Download release assets from the project's GitHub Releases page:
 
 - `slackware-cli-manager-<version>-x86_64-1.txz`
-- `slackware-cli-manager-v<version>-x86_64-unknown-linux-musl.tar.gz`
+- `slackware-cli-manager-v<version>-x86_64-linux.tar.gz`
 - `SHA256SUMS.txt`
 
 GitHub releases publish two installable asset types for tagged versions:
@@ -77,8 +77,8 @@ sudo upgradepkg --install-new slackware-cli-manager-0.1.1-x86_64-1.txz
 Portable archive install without package management:
 
 ```bash
-tar -xzf slackware-cli-manager-v0.1.1-x86_64-unknown-linux-musl.tar.gz
-sudo install -m 0755 slackware-cli-manager-v0.1.1-x86_64-unknown-linux-musl/slackware-cli-manager /usr/local/bin/slackware-cli-manager
+tar -xzf slackware-cli-manager-v0.1.1-x86_64-linux.tar.gz
+sudo install -m 0755 slackware-cli-manager-v0.1.1-x86_64-linux/slackware-cli-manager /usr/local/bin/slackware-cli-manager
 ```
 
 Remove a package install:
@@ -93,10 +93,10 @@ Remove a portable install:
 sudo rm -f /usr/local/bin/slackware-cli-manager
 ```
 
-### From crates.io
+### With `go install`
 
 ```bash
-cargo install --locked slackware-cli-manager
+go install github.com/goshitsarch-eng/Gosh-Slack-CLI-Manager/cmd/slackware-cli-manager@latest
 ```
 
 ### From source
@@ -104,8 +104,8 @@ cargo install --locked slackware-cli-manager
 ```bash
 git clone https://github.com/goshitsarch-eng/Gosh-Slack-CLI-Manager
 cd Gosh-Slack-CLI-Manager
-cargo build --release --locked
-sudo install -m 0755 target/release/slackware-cli-manager /usr/local/bin/slackware-cli-manager
+CGO_ENABLED=0 go build -trimpath -ldflags "-s -w" -o slackware-cli-manager ./cmd/slackware-cli-manager
+sudo install -m 0755 slackware-cli-manager /usr/local/bin/slackware-cli-manager
 ```
 
 ## Usage
@@ -144,10 +144,12 @@ Current release notes and milestone summaries live in [CHANGELOG.md](CHANGELOG.m
 ## Development
 
 ```bash
-cargo fmt --check
-cargo clippy --all-targets --all-features -- -D warnings
-cargo test --all-targets --all-features
+gofmt -l .
+go vet ./...
+go test ./...
 ```
+
+The binary is a single static executable with no cgo. The terminal layer is a small cell-buffer toolkit in `internal/tui` (layout solver, blocks, paragraphs, lists, gauges, text editor) on top of [tcell](https://github.com/gdamore/tcell).
 
 CI runs the same checks on pushes to `main` and on pull requests.
 

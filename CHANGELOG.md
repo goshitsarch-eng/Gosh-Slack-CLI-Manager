@@ -6,7 +6,17 @@ The format follows Keep a Changelog conventions and uses semantic-style release 
 
 ## [Unreleased]
 
-No unreleased changes recorded yet.
+### Changed
+
+- Rewrote the application in Go. Screens, key bindings, messages, file handling and command execution are unchanged; every tab was verified cell-for-cell (symbols, colors and modifiers) against the Rust build across thousands of scripted scenarios and terminal sizes.
+- The terminal UI now runs on a small in-tree rendering toolkit (`internal/tui`) that ports the parts of Ratatui 0.29 the app used — the Cassowary layout solver, blocks, paragraphs with word wrapping, lists, gauges and the tui-textarea editor — on top of tcell.
+- Builds produce a single static binary with no cgo; `go build` replaces `cargo build`, and CI, release automation and the packaging script use the Go toolchain.
+- The portable release archive is now named `slackware-cli-manager-v<version>-x86_64-linux.tar.gz` (previously `...-x86_64-unknown-linux-musl.tar.gz`).
+
+### Fixed
+
+- Truncating multibyte text (cron commands, package search and package browser descriptions) no longer crashes when the cut lands inside a character.
+- Layout calculations always terminate; the previous solver could loop on rare constraint combinations.
 
 ## [0.1.1] - 2026-03-13
 

@@ -7,24 +7,26 @@ on:
   pull_request:
 
 jobs:
-  rust:
+  go:
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Cache build artifacts
-        uses: Swatinem/rust-cache@v2
+      - name: Install Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
 
       - name: Check formatting
-        run: cargo fmt --check
+        run: test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }
 
-      - name: Run Clippy
-        run: cargo clippy --all-targets --all-features -- -D warnings
+      - name: Vet
+        run: go vet ./...
 
       - name: Run tests
-        run: cargo test --all-targets --all-features
+        run: go test -race ./...
+
+      - name: Build
+        run: CGO_ENABLED=0 go build -trimpath -o /dev/null ./cmd/slackware-cli-manager
