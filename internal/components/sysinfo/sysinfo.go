@@ -269,7 +269,9 @@ func (c *Component) renderProcesses(f *tui.Frame, area tui.Rect) {
 			name = name[:30]
 		}
 		items = append(items, tui.ListItemLine(tui.LineFrom(
-			tui.Styled(fmt.Sprintf("%6d ", p.pid), tui.NewStyle().FG(tui.DarkGray)),
+			// The original formats with `{:>6}`, but sysinfo's Pid Display
+			// ignores width, so no padding is applied.
+			tui.Styled(fmt.Sprintf("%d ", p.pid), tui.NewStyle().FG(tui.DarkGray)),
 			tui.Styled(fmt.Sprintf("%5.1f%% ", p.cpuUsage), tui.NewStyle().FG(usageColor(asU16(float64(p.cpuUsage))))),
 			tui.Styled(fmt.Sprintf("%8s ", formatBytes(p.memory)), tui.NewStyle().FG(tui.Yellow)),
 			tui.Raw(string(name)),

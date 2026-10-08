@@ -1,13 +1,16 @@
 package tui
 
 import (
+	"fmt"
 	"math"
+	"slices"
+	"sync"
 
 	"github.com/goshitsarch-eng/Gosh-Slack-CLI-Manager/internal/tui/cassowary"
 )
 
 // This file is a port of ratatui 0.29's layout solver (src/layout/layout.rs),
-// minus the LRU cache. Rects passed in and returned follow ratatui's u16
+// with a bounded result cache in place of its LRU cache. Rects passed in and returned follow ratatui's u16
 // semantics.
 
 // Direction is the axis along which a Layout splits its area.
@@ -104,11 +107,47 @@ func (l Layout) Split(area Rect) []Rect {
 // SplitWithSpacers returns the segment rects and the len(constraints)+1
 // spacer rects around them.
 func (l Layout) SplitWithSpacers(area Rect) (segments, spacers []Rect) {
+	key := l.cacheKey(area)
+	layoutCache.mu.Lock()
+	cached, ok := layoutCache.entries[key]
+	layoutCache.mu.Unlock()
+	if ok {
+		return slices.Clone(cached.segments), slices.Clone(cached.spacers)
+	}
+
 	segments, spacers, err := l.trySplit(area)
 	if err != nil {
 		panic("failed to split: " + err.Error()) // ratatui: .expect("failed to split")
 	}
+
+	layoutCache.mu.Lock()
+	if len(layoutCache.entries) >= layoutCacheSize {
+		clear(layoutCache.entries)
+	}
+	layoutCache.entries[key] = cachedSplit{slices.Clone(segments), slices.Clone(spacers)}
+	layoutCache.mu.Unlock()
 	return segments, spacers
+}
+
+// layoutCacheSize bounds the split cache. Like ratatui's layout cache it
+// avoids re-running the solver for the same layout every frame.
+const layoutCacheSize = 1024
+
+type cachedSplit struct{ segments, spacers []Rect }
+
+var layoutCache = struct {
+	mu      sync.Mutex
+	entries map[string]cachedSplit
+}{entries: make(map[string]cachedSplit)}
+
+func (l Layout) cacheKey(area Rect) string {
+	b := make([]byte, 0, 64+len(l.Constraints)*12)
+	b = fmt.Appendf(b, "%d,%d,%d,%d|%d|%d,%d|%d|%d|", area.X, area.Y, area.Width, area.Height,
+		l.Direction, l.HorizontalMargin, l.VerticalMargin, l.Flex, l.Spacing)
+	for _, c := range l.Constraints {
+		b = fmt.Appendf(b, "%d:%d:%d;", c.Kind, c.Value, c.Den)
+	}
+	return string(b)
 }
 
 // floatPrecisionMultiplier decides floating point precision when rounding.
